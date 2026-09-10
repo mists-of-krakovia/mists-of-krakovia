@@ -332,18 +332,27 @@ export default function CharactersPage() {
   const [creating, setCreating]           = useState(false);
   const [loading, setLoading]             = useState(true);
 
-  async function loadCharacters() {
-    try {
-      const { data } = await characterService.list();
-      setCharacters(data);
-    } catch (err) {
-      console.error('Erro ao carregar personagens:', err);
-    } finally {
-      setLoading(false);
-    }
-  }
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  useEffect(() => { loadCharacters(); }, []);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await characterService.list();
+        if (!cancelled) setCharacters(data);
+      } catch (err) {
+        console.error('Erro ao carregar personagens:', err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [refreshKey]);
+
+  function reloadCharacters() {
+    setLoading(true);
+    setRefreshKey(k => k + 1);
+  }
 
   function handleSelect(char) {
     selectCharacter(char);
@@ -357,7 +366,7 @@ export default function CharactersPage() {
 
   function handleCreated() {
     setCreating(false);
-    loadCharacters();
+    reloadCharacters();
   }
 
   if (loading) return (

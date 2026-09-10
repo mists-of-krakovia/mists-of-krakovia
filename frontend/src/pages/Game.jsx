@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGame } from '../context/GameContext';
 import { characterService } from '../services/api';
@@ -602,10 +602,30 @@ export default function Game() {
   const [moving, setMoving]           = useState(false);
   const [narrationSeed, setNarrationSeed] = useState(() => Math.floor(Math.random() * 1000));
 
+  const loadGameState = useCallback(async () => {
+    try {
+      const { data } = await characterService.enter(character.id);
+      setGameState(data);
+      setShowIntro(data.isFirstLogin);
+    } catch (err) {
+      console.error('Erro ao entrar no jogo:', err);
+      navigate('/characters');
+    } finally {
+      setLoading(false);
+    }
+  }, [character, navigate]);
+
   useEffect(() => {
-    if (!character) { navigate('/characters'); return; }
-    loadGameState();
-  }, [character]);
+    if (!character) {
+      navigate('/characters');
+      return;
+    }
+    // Data-fetching assíncrono: o setState ocorre após o await dentro de
+    // loadGameState, não sincronamente neste effect. A regra experimental de
+    // immutability não distingue esse caso; suprimida pontualmente aqui.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadGameState();
+  }, [character, navigate, loadGameState]);
 
   useEffect(() => {
     if (!character || !gameState) return;
@@ -623,19 +643,6 @@ export default function Game() {
     window.addEventListener('beforeunload', handleUnload);
     return () => window.removeEventListener('beforeunload', handleUnload);
   }, [character]);
-
-  async function loadGameState() {
-    try {
-      const { data } = await characterService.enter(character.id);
-      setGameState(data);
-      setShowIntro(data.isFirstLogin);
-    } catch (err) {
-      console.error('Erro ao entrar no jogo:', err);
-      navigate('/characters');
-    } finally {
-      setLoading(false);
-    }
-  }
 
   // handleMove fica aqui — tem acesso a character, setGameState e setCurrentPage
   async function handleMove(toNodeId) {

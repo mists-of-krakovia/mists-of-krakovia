@@ -33,6 +33,7 @@ router.get('/', async (req, res) => {
 
 // POST /characters
 router.post('/', async (req, res) => {
+ try {
   const { name, characterClass, attributes } = req.body;
 
   const { count } = await supabase
@@ -136,6 +137,7 @@ router.post('/', async (req, res) => {
     .single();
 
   if (charError) {
+    console.error('[create] erro ao inserir personagem:', charError.message);
     return res.status(500).json({ error: 'Erro ao criar personagem.' });
   }
 
@@ -160,6 +162,10 @@ router.post('/', async (req, res) => {
     message: 'Personagem criado com sucesso.',
     character
   });
+ } catch (err) {
+   console.error('[create] EXCEPTION:', err && err.message, err && err.stack);
+   res.status(500).json({ error: 'Erro ao criar personagem.' });
+ }
 });
 
 // POST /characters/:characterId/enter

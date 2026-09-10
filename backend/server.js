@@ -10,10 +10,16 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// Cliente Supabase com a service key (acesso total, só no backend)
+// Cliente Supabase com a service key (acesso total, ignora RLS — só no backend).
+// persistSession/autoRefreshToken desligados: este cliente é exclusivo de
+// operações de banco e NUNCA deve ser usado para login de usuário. Se um
+// cliente service_role fizer signInWithPassword, ele passa a enviar o token do
+// usuário (role authenticated) nas queries seguintes e a RLS volta a valer —
+// foi a causa do erro 42501 na criação de personagem.
 const supabase = createClient(
   process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
+  process.env.SUPABASE_SERVICE_KEY,
+  { auth: { persistSession: false, autoRefreshToken: false } }
 );
 
 // Exporta o supabase para usar nos outros arquivos

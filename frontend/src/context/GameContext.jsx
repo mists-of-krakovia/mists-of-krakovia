@@ -1,30 +1,29 @@
-import { createContext, useContext, useState, useEffect } from 'react';
-import { authService } from '../services/api';
+import { createContext, useContext, useState } from 'react';
 
 const GameContext = createContext(null);
 
-export function GameProvider({ children }) {
-  const [user, setUser]           = useState(null);
-  const [token, setToken]         = useState(null);
-  const [character, setCharacter] = useState(null);
-  const [loading, setLoading]     = useState(true);
-
-  // Ao iniciar, verifica se há sessão salva
-  useEffect(() => {
-    const savedToken = localStorage.getItem('krakovia_token');
-    const savedUser  = localStorage.getItem('krakovia_user');
-	const savedCharacter = localStorage.getItem('krakovia_character');
-
-    if (savedToken && savedUser) {
-      setToken(savedToken);
-      setUser(JSON.parse(savedUser));
-      if (savedCharacter) {                                            // linha nova
-        setCharacter(JSON.parse(savedCharacter));                      // linha nova
-      }                                                                // linha nova
+// Lê e faz parse seguro de um item do localStorage (null se ausente/corrompido).
+function readStored(key, { json = false } = {}) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw == null) return null;
+    return json ? JSON.parse(raw) : raw;
+  } catch {
+    return null;
   }
+}
 
-    setLoading(false);
-  }, []);
+export function GameProvider({ children }) {
+  // Inicialização preguiçosa: lê a sessão salva uma única vez, sem useEffect
+  // (evita setState dentro de effect e o flicker de "loading").
+  const [token, setToken]         = useState(() => readStored('krakovia_token'));
+  const [user, setUser]           = useState(() => readStored('krakovia_user', { json: true }));
+  const [character, setCharacter] = useState(() => readStored('krakovia_character', { json: true }));
+
+  // A restauração da sessão é síncrona (lazy initializers acima), então nunca
+  // há um estado de "carregando" inicial. Mantido no contexto por compatibilidade
+  // com quem consome `loading` (ex.: <Protected> em App.jsx).
+  const loading = false;
 
   function login(userData, userToken) {
     setUser(userData);
@@ -39,12 +38,12 @@ export function GameProvider({ children }) {
     setCharacter(null);
     localStorage.removeItem('krakovia_token');
     localStorage.removeItem('krakovia_user');
-	localStorage.removeItem('krakovia_character');
+    localStorage.removeItem('krakovia_character');
   }
 
   function selectCharacter(char) {
     setCharacter(char);
-	localStorage.setItem('krakovia_character', JSON.stringify(char));
+    localStorage.setItem('krakovia_character', JSON.stringify(char));
   }
 
   return (
@@ -57,6 +56,7 @@ export function GameProvider({ children }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useGame() {
   return useContext(GameContext);
 }

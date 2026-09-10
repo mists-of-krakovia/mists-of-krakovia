@@ -1,6 +1,17 @@
 const express = require('express');
 const router = express.Router();
+const { createClient } = require('@supabase/supabase-js');
 const { supabase } = require('../server');
+
+// Cliente dedicado ao fluxo de login. É service_role (precisa do admin API para
+// criar usuário), mas fica ISOLADO do cliente de dados: quando faz
+// signInWithPassword, apenas ESTE cliente passa a carregar a sessão do usuário,
+// sem afetar o `supabase` compartilhado usado pelas queries com RLS ignorada.
+const authClient = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_KEY,
+  { auth: { persistSession: false, autoRefreshToken: false } }
+);
 
 // Registro de novo usuário
 // POST /auth/register
@@ -27,8 +38,8 @@ router.post('/register', async (req, res) => {
     return res.status(400).json({ error: 'Este username já está em uso.' });
   }
 
-  // Cria o usuário no Supabase Auth
-  const { data, error } = await supabase.auth.admin.createUser({
+  // Cria o usuário no Supabase Auth (cliente de auth isolado)
+  const { data, error } = await authClient.auth.admin.createUser({
     email,
     password,
     user_metadata: { username },
@@ -62,7 +73,7 @@ router.post('/login', async (req, res) => {
     return res.status(400).json({ error: 'Email e senha são obrigatórios.' });
   }
 
-  const { data, error } = await supabase.auth.signInWithPassword({
+  const { data, error } = await authClient.auth.signInWithPassword({
     email,
     password
   });
