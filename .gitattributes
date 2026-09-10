@@ -1,0 +1,13 @@
+# Normaliza quebras de linha: no repo sempre LF; no checkout, o Git converte
+# conforme o SO. Evita ruído de CRLF/LF em diffs entre máquinas.
+* text=auto eol=lf
+
+# Arquivos binários — nunca normalizar.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.svg text
+*.pdf binary
+*.ico binary

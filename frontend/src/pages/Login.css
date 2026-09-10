@@ -1,0 +1,126 @@
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--color-bg);
+  padding: 24px;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 400px;
+  background: var(--color-bg-panel);
+  border: 1px solid var(--color-border-gold);
+  border-radius: var(--radius-lg);
+  padding: 40px 32px;
+}
+
+.login-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.login-title {
+  font-family: var(--font-ui);
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: 4px;
+  color: var(--color-gold);
+  margin-bottom: 10px;
+}
+
+.login-tagline {
+  font-size: 15px;
+  color: var(--color-text-dim);
+  font-style: italic;
+}
+
+.login-tabs {
+  display: flex;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.tab {
+  flex: 1;
+  background: none;
+  border: none;
+  padding: 10px;
+  color: var(--color-text-dim);
+  cursor: pointer;
+  font-size: 13px;
+  font-family: var(--font-ui);
+  transition: color 0.2s;
+}
+
+.tab.active {
+  color: var(--color-gold);
+  border-bottom: 2px solid var(--color-gold);
+  margin-bottom: -1px;
+}
+
+.field {
+  margin-bottom: 16px;
+}
+
+.field label {
+  display: block;
+  font-size: 12px;
+  color: var(--color-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 6px;
+}
+
+.field input {
+  width: 100%;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  color: var(--color-text);
+  font-size: 14px;
+  font-family: var(--font-ui);
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.field input:focus {
+  border-color: var(--color-gold-dim);
+}
+
+.login-error {
+  color: var(--color-text-danger);
+  font-size: 13px;
+  margin-bottom: 16px;
+  padding: 10px;
+  background: rgba(197, 48, 48, 0.1);
+  border-radius: var(--radius);
+  border: 1px solid rgba(197, 48, 48, 0.2);
+}
+
+.btn-primary {
+  width: 100%;
+  background: var(--color-gold-dim);
+  border: 1px solid var(--color-gold);
+  border-radius: var(--radius);
+  padding: 12px;
+  color: var(--color-gold);
+  font-size: 13px;
+  font-family: var(--font-ui);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.2s;
+  margin-top: 8px;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #5a4820;
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

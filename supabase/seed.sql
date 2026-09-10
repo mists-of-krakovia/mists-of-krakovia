@@ -1,0 +1,11 @@
+-- ─── Seed — Mists of Krakóvia ─────────────────────────────────────────
+-- Dados iniciais do mundo (idempotentes sempre que possível).
+--
+-- Este arquivo é aplicado por `supabase db reset` (local) e pode ser
+-- executado no remoto manualmente quando necessário. É o lugar para os
+-- dados-semente do MVP: nós do mundo (Ironfall e conexões), NPCs, itens,
+-- relógio do mundo, quests iniciais, etc.
+--
+-- Ainda vazio: será preenchido no primeiro spec (Fundação técnica), depois
+-- que o schema for versionado via `supabase db pull`.
+-- ──────────────────────────────────────────────────────────────────────

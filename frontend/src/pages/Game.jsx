@@ -1,0 +1,737 @@
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useGame } from '../context/GameContext';
+import { characterService } from '../services/api';
+import './Game.css';
+
+const INTRO_TEXT = `Você chegou a Ironfall antes do amanhecer.
+
+A cidade acorda devagar. O cheiro de carvão mistura com névoa fria. As ruas de pedra ainda guardam o silêncio da madrugada, e as luzes das forjas já piscam lá no fundo do distrito industrial. Ironfall não é uma cidade bonita. É uma cidade que funciona — ou pelo menos tenta.
+
+Ao norte, além dos muros e das colinas de cinza, você consegue ver. Não claramente. Mas consegue. Uma linha no horizonte que não é nuvem, não é fumaça, não é névoa comum. É a Névoa. Sempre esteve lá. Todo mundo diz que não vale a pena olhar para ela.
+
+Todo mundo.
+
+Você está no Distrito Central de Ironfall. Há pessoas aqui — algumas dispostas a conversar, outras com coisas a oferecer, algumas com histórias que não terminaram. O mapa ao seu redor é seu para descobrir. Nenhum marcador vai guiar você. Nenhuma seta vai apontar o caminho.
+
+O que está além da névoa é sua decisão descobrir.`;
+
+const CLASS_LABELS = {
+  vagante_nevoas:  'Vagante das Névoas',
+  arauto_conclave: 'Arauto do Conclave',
+  exilado_ferro:   'Exilado de Ferro',
+  confessor_veu:   'Confessor do Véu',
+  cronista_ruinas: 'Cronista das Ruínas'
+};
+
+const EQUIPMENT_SLOTS = [
+  { key: 'head',      label: 'Cabeça'          },
+  { key: 'chest',     label: 'Tórax'           },
+  { key: 'hands',     label: 'Mãos'            },
+  { key: 'legs',      label: 'Pernas'          },
+  { key: 'main_hand', label: 'Arma Principal'  },
+  { key: 'off_hand',  label: 'Arma Secundária' },
+  { key: 'accessory', label: 'Acessório'       },
+];
+
+const GRADE = [
+  '','F-','F','F+','E-','E','E+',
+  'D-','D','D+','C-','C','C+',
+  'B-','B','B+','A-','A','A+','S-','S','S+'
+];
+
+function grade(val) { return GRADE[val] || val || '—'; }
+
+// ─── Introdução ──────────────────────────────────────────────────────
+function IntroScreen({ characterName, onContinue }) {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setVisible(true), 100);
+    return () => clearTimeout(t);
+  }, []);
+
+  return (
+    <div className={`intro-screen ${visible ? 'visible' : ''}`}>
+      <div className="intro-content">
+        <p className="intro-name text-gold">{characterName}</p>
+        <div className="intro-text font-narrative">
+          {INTRO_TEXT.split('\n\n').map((p, i) => <p key={i}>{p}</p>)}
+        </div>
+        <button className="btn-primary intro-btn" onClick={onContinue}>
+          Entrar no mundo
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Painel esquerdo ─────────────────────────────────────────────────
+function PanelLeft({ character, currentPage, onNavigate, onLogout }) {
+  const derived = character?.character_derived || {};
+
+  const hpPct      = derived.hp_max      ? (derived.hp_current      / derived.hp_max)      * 100 : 0;
+  const staminaPct = derived.stamina_max ? (derived.stamina_current / derived.stamina_max) * 100 : 0;
+  const xpPct      = character?.xp_to_next ? (character.xp / character.xp_to_next) * 100 : 0;
+
+  const navButtons = [
+    { id: 'world',     label: 'Mundo'      },
+    { id: 'character', label: 'Personagem' },
+    { id: 'inventory', label: 'Inventário' },
+    { id: 'quests',    label: 'Missões'    },
+    { id: 'documents', label: 'Documentos' },
+    { id: 'skills',    label: 'Perícias'   },
+  ];
+
+  return (
+    <div className="panel panel-left">
+      <div className="panel-section">
+        <div className="char-name text-gold">{character?.name}</div>
+        <div className="char-meta text-dim">
+          {CLASS_LABELS[character?.class] || character?.class} · Nível {character?.level}
+        </div>
+      </div>
+
+      <div className="panel-section">
+        <div className="status-row">
+          <span className="status-label text-dim">PV</span>
+          <div className="status-bar">
+            <div className="status-fill hp" style={{ width: `${hpPct}%` }} />
+          </div>
+          <span className="status-numbers text-dim">
+            {derived.hp_current ?? '—'}/{derived.hp_max ?? '—'}
+          </span>
+        </div>
+        <div className="status-row">
+          <span className="status-label text-dim">STM</span>
+          <div className="status-bar">
+            <div className="status-fill stamina" style={{ width: `${staminaPct}%` }} />
+          </div>
+          <span className="status-numbers text-dim">
+            {derived.stamina_current ?? '—'}/{derived.stamina_max ?? '—'}
+          </span>
+        </div>
+        <div className="status-row">
+          <span className="status-label text-dim">XP</span>
+          <div className="status-bar">
+            <div className="status-fill xp" style={{ width: `${xpPct}%` }} />
+          </div>
+          <span className="status-numbers text-dim">
+            {character?.xp ?? 0}/{character?.xp_to_next ?? 100}
+          </span>
+        </div>
+      </div>
+
+      <div className="panel-section nav-section">
+        {navButtons.map(btn => (
+          <button
+            key={btn.id}
+            className={`nav-btn ${currentPage === btn.id ? 'active' : ''}`}
+            onClick={() => onNavigate(btn.id)}
+          >
+            {btn.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="panel-footer">
+        <button className="btn-ghost small" onClick={onLogout}>
+          Sair da conta
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Página: Mundo ───────────────────────────────────────────────────
+function PageWorld({ node, clock, narrationSeed }) {
+  const phaseLabel = clock?.currentPhase === 'morning' ? 'Dia' : 'Noite';
+  const minutes    = clock?.secondsUntilNextPhase
+    ? Math.ceil(clock.secondsUntilNextPhase / 60) : null;
+
+  const weather     = clock?.current_weather || 'clear';
+  const weatherLabel = {
+    clear:      '',
+    rain:       '· Chuva',
+    heavy_rain: '· Chuva forte',
+    fog:        '· Névoa baixa',
+    storm:      '· Tempestade',
+    snow:       '· Neve',
+  }[weather] || '';
+
+  const narration = getNodeNarration(
+    node?.description_key,
+    clock?.currentPhase,
+    weather,
+    narrationSeed
+  );
+
+  return (
+    <div className="page-content">
+      <div className="world-header">
+        <div className="world-location text-gold">{node?.name}</div>
+        <div className="world-clock text-dim">
+          {phaseLabel}
+          {minutes !== null &&
+            ` · ${minutes}min até ${clock.currentPhase === 'morning' ? 'noite' : 'amanhecer'}`}
+          {weatherLabel && ` ${weatherLabel}`}
+        </div>
+      </div>
+      <div className="narration-box font-narrative">
+        <p>{narration}</p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Página: Personagem ──────────────────────────────────────────────
+function PageCharacter({ character, inventory }) {
+  const attrs   = character?.character_attributes || {};
+  const derived = character?.character_derived    || {};
+
+  const equipped = {};
+  (inventory || []).forEach(inv => {
+    if (inv.is_equipped && inv.equipped_slot) {
+      equipped[inv.equipped_slot] = inv;
+    }
+  });
+
+  const baseAttrs = [
+    { abbr: 'FOR', label: 'Força',       val: attrs.strength   },
+    { abbr: 'AGI', label: 'Agilidade',   val: attrs.agility    },
+    { abbr: 'RES', label: 'Resistência', val: attrs.resistance },
+    { abbr: 'INT', label: 'Intelecto',   val: attrs.intellect  },
+    { abbr: 'PER', label: 'Percepção',   val: attrs.perception },
+  ];
+
+  const derivedAttrs = [
+    { label: 'Pontos de Vida',   val: `${derived.hp_current ?? '—'}/${derived.hp_max ?? '—'}` },
+    { label: 'Estamina',         val: `${derived.stamina_current ?? '—'}/${derived.stamina_max ?? '—'}` },
+    { label: 'Ataque C.C.',      val: derived.attack_melee      ?? '—' },
+    { label: 'Ataque Distância', val: derived.attack_ranged     ?? '—' },
+    { label: 'Defesa',           val: derived.defense           ?? '—' },
+    { label: 'Evasão',           val: derived.evasion           ?? '—' },
+    { label: 'Velocidade',       val: derived.speed             ?? '—' },
+    { label: 'Acerto',           val: derived.accuracy          ?? '—' },
+    { label: 'Crítico',          val: derived.crit_chance ? `${derived.crit_chance}%` : '—' },
+    { label: 'Dano Crítico',     val: derived.crit_damage ? `${derived.crit_damage}×` : '—' },
+    { label: 'Observação',       val: derived.observation       ?? '—' },
+    { label: 'R. Mental',        val: derived.mental_resistance ?? '—' },
+    { label: 'R. Névoa',         val: derived.mist_resistance   ?? '—' },
+    { label: 'Carga máx.',       val: derived.carry_capacity ? `${derived.carry_capacity}kg` : '—' },
+    { label: 'Sanidade',         val: derived.mental_resistance
+        ? Math.round(derived.mental_resistance / 3) : '—' },
+  ];
+
+  return (
+    <div className="page-content">
+      <div className="page-header">
+        <h2 className="page-title text-gold">{character?.name}</h2>
+        <p className="page-subtitle text-dim">
+          {CLASS_LABELS[character?.class]} · Nível {character?.level}
+        </p>
+      </div>
+
+      <div className="char-page-section">
+        <div className="section-label text-dim">Progressão</div>
+        <div className="xp-info">
+          <span>{character?.xp ?? 0} / {character?.xp_to_next ?? 100} XP</span>
+          {attrs.points_available > 0 && (
+            <span className="points-alert text-gold">
+              · {attrs.points_available} ponto{attrs.points_available > 1 ? 's' : ''} disponível{attrs.points_available > 1 ? 'is' : ''}
+            </span>
+          )}
+        </div>
+        <div className="status-bar" style={{ marginTop: 6 }}>
+          <div className="status-fill xp"
+            style={{ width: `${(character?.xp / character?.xp_to_next) * 100}%` }} />
+        </div>
+      </div>
+
+      <div className="char-page-section">
+        <div className="section-label text-dim">Equipamentos</div>
+        <div className="equipment-slots">
+          {EQUIPMENT_SLOTS.map(slot => {
+            const item = equipped[slot.key];
+            return (
+              <div key={slot.key} className={`equip-slot ${item ? 'filled' : 'empty'}`}>
+                <span className="equip-slot-label text-dim">{slot.label}</span>
+                <span className="equip-slot-item">
+                  {item ? item.items?.name || 'Item' : <span className="text-dim">—</span>}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="char-page-section">
+        <div className="section-label text-dim">Atributos Base</div>
+        <div className="attr-table">
+          {baseAttrs.map(a => (
+            <div key={a.abbr} className="attr-table-row">
+              <span className="attr-table-abbr text-dim">{a.abbr}</span>
+              <span className="attr-table-label">{a.label}</span>
+              <span className="attr-table-grade text-gold">{grade(a.val)}</span>
+              <span className="attr-table-num text-dim">({a.val ?? '—'})</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="char-page-section">
+        <div className="section-label text-dim">Atributos Derivados</div>
+        <div className="derived-table">
+          {derivedAttrs.map(a => (
+            <div key={a.label} className="derived-table-row">
+              <span className="derived-label text-dim">{a.label}</span>
+              <span className="derived-val">{a.val}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Página: Inventário ──────────────────────────────────────────────
+function PageInventory({ inventory, derived }) {
+  const items    = inventory || [];
+  const equipped = items.filter(i => i.is_equipped);
+  const backpack = items.filter(i => !i.is_equipped);
+
+  const totalWeight = items.reduce((sum, i) => sum + ((i.items?.weight || 0) * (i.quantity || 1)), 0);
+  const maxWeight   = derived?.carry_capacity || 0;
+  const weightPct   = maxWeight ? Math.min((totalWeight / maxWeight) * 100, 100) : 0;
+  const weightOver  = totalWeight > maxWeight;
+
+  const RARITY_COLORS = {
+    common:   'var(--color-text-dim)',
+    uncommon: '#48bb78',
+    rare:     '#63b3ed',
+    unique:   'var(--color-gold)',
+  };
+
+  function ItemRow({ inv }) {
+    const item = inv.items || {};
+    return (
+      <div className="inventory-item">
+        <div className="inv-item-info">
+          <span className="inv-item-name"
+            style={{ color: RARITY_COLORS[item.rarity] || 'inherit' }}>
+            {item.name || 'Item desconhecido'}
+          </span>
+          {inv.quantity > 1 && (
+            <span className="inv-item-qty text-dim">×{inv.quantity}</span>
+          )}
+          {inv.durability !== null && inv.durability !== undefined && (
+            <span className="inv-item-dur text-dim">Dur. {inv.durability}</span>
+          )}
+        </div>
+        <span className="inv-item-weight text-dim">
+          {((item.weight || 0) * (inv.quantity || 1)).toFixed(1)}kg
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="page-content">
+      <div className="page-header">
+        <h2 className="page-title text-gold">Inventário</h2>
+        <div className="weight-row">
+          <span className={`weight-info ${weightOver ? 'text-danger' : 'text-dim'}`}>
+            {totalWeight.toFixed(1)}kg / {maxWeight}kg
+          </span>
+          <div className="status-bar" style={{ flex: 1, marginLeft: 12 }}>
+            <div className="status-fill"
+              style={{
+                width: `${weightPct}%`,
+                background: weightOver ? '#c53030' : '#c9a84c'
+              }} />
+          </div>
+        </div>
+      </div>
+
+      {equipped.length > 0 && (
+        <div className="char-page-section">
+          <div className="section-label text-dim">Equipado</div>
+          {equipped.map(inv => <ItemRow key={inv.id} inv={inv} />)}
+        </div>
+      )}
+
+      <div className="char-page-section">
+        <div className="section-label text-dim">
+          Mochila {backpack.length === 0 &&
+            <span className="text-dim font-narrative"> — vazia</span>}
+        </div>
+        {backpack.length > 0
+          ? backpack.map(inv => <ItemRow key={inv.id} inv={inv} />)
+          : <p className="text-dim font-narrative"
+               style={{ fontSize: 14, fontStyle: 'italic' }}>
+              Nada além do que você carrega consigo.
+            </p>
+        }
+      </div>
+    </div>
+  );
+}
+
+// ─── Página: Em construção ───────────────────────────────────────────
+function PageUnderConstruction({ label }) {
+  return (
+    <div className="page-content under-construction">
+      <p className="text-dim font-narrative">{label} — em construção.</p>
+    </div>
+  );
+}
+
+// ─── Painel direito ──────────────────────────────────────────────────
+// onMove vem do componente principal onde character e setGameState existem
+function PanelRight({ node, connections, npcs, activeQuests, onlinePlayers, onMove }) {
+  const [activeTab, setActiveTab] = useState('world');
+
+  const safeNpcs          = npcs          || [];
+  const safeConnections   = connections   || [];
+  const safeActiveQuests  = activeQuests  || [];
+  const safeOnlinePlayers = onlinePlayers || [];
+
+  return (
+    <div className="panel panel-right">
+
+      <div className="interaction-tabs">
+        <button
+          className={`itab ${activeTab === 'world' ? 'active' : ''}`}
+          onClick={() => setActiveTab('world')}
+        >
+          Mundo
+        </button>
+        <button
+          className={`itab ${activeTab === 'online' ? 'active' : ''}`}
+          onClick={() => setActiveTab('online')}
+        >
+          Online
+          {safeOnlinePlayers.length > 0 && (
+            <span className="badge">{safeOnlinePlayers.length}</span>
+          )}
+        </button>
+      </div>
+
+      {activeTab === 'world' && (
+        <>
+          {safeNpcs.length > 0 && (
+            <div className="interaction-section">
+              <div className="section-label text-dim">Pessoas aqui</div>
+              {safeNpcs.map(npc => (
+                <div key={npc.id} className="npc-item">
+                  <div className="npc-name">
+                    {npc.name}
+                    {npc.is_quest_giver && <span className="quest-dot" />}
+                  </div>
+                  {npc.description && (
+                    <div className="npc-desc text-dim font-narrative">
+                      {npc.description}
+                    </div>
+                  )}
+                  <button className="btn-action">Falar</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {safeConnections.length > 0 && (
+            <div className="interaction-section">
+              <div className="section-label text-dim">Saídas</div>
+              {safeConnections.map(conn => (
+                <div key={conn.id} className="exit-item">
+                  <div className="exit-info">
+                    <span className="exit-label">{conn.direction_label}</span>
+                    {conn.world_nodes?.is_safe_zone && (
+                      <span className="exit-safe text-dim">Zona segura</span>
+                    )}
+                  </div>
+                  <span className="exit-cost text-dim">{conn.travel_cost} STM</span>
+                  <button
+                    className="btn-action"
+                    onClick={() => onMove(conn.to_node_id)}
+                  >
+                    Ir →
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {!node?.is_safe_zone && (
+            <div className="interaction-section">
+              <div className="section-label text-dim">Ações de campo</div>
+              <button className="btn-field">Explorar área</button>
+              <button className="btn-field">Caçar (manual)</button>
+              <button className="btn-field">Coletar recursos</button>
+            </div>
+          )}
+
+          {safeActiveQuests.length > 0 && (
+            <div className="interaction-section">
+              <div className="section-label text-dim">Missões ativas</div>
+              {safeActiveQuests.map((cq, i) => (
+                <div key={i} className="quest-compact">
+                  <span className="text-gold">{cq.quests?.title}</span>
+                  <span className="text-dim"> · Etapa {cq.current_step}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {activeTab === 'online' && (
+        <div className="interaction-section">
+          <div className="section-label text-dim">
+            {safeOnlinePlayers.length === 0
+              ? 'Ninguém mais aqui'
+              : `${safeOnlinePlayers.length} jogador${safeOnlinePlayers.length > 1 ? 'es' : ''} neste local`
+            }
+          </div>
+          {safeOnlinePlayers.length === 0 ? (
+            <p className="text-dim font-narrative"
+               style={{ fontSize: 13, fontStyle: 'italic', marginTop: 8 }}>
+              Você está sozinho aqui por enquanto.
+            </p>
+          ) : (
+            safeOnlinePlayers.map(p => (
+              <div key={p.character_id} className="online-player">
+                <span className="online-name">{p.name}</span>
+                <span className="online-meta text-dim">
+                  Nv.{p.level} · {CLASS_LABELS[p.class] || p.class}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+    </div>
+  );
+}
+
+// ─── Sistema de narração dinâmica ───────────────────────────────────
+
+// Descrições base — múltiplas variações por local
+// Uma delas é sorteada a cada entrada no local
+const NODE_DESCRIPTIONS = {
+  ironfall_central: [
+    'Uma cidade que cheira a ferro e fumaça de carvão. As ruas de pedra cinza estão sempre movimentadas — comerciantes, guardas, trabalhadores das forjas. Ironfall não é bonita. É funcional, e sabe disso.',
+    'O barulho de Ironfall nunca para completamente. Mesmo nos momentos mais calmos, há sempre o som distante de uma bigorna, de passos sobre pedra, de alguém negociando algo que provavelmente não deveria. A cidade respira metal.',
+    'Ironfall foi construída para durar, não para impressionar. Cada pedra foi colocada com propósito. Os mais velhos dizem que havia uma praça central antes — foi desmontada para construir mais forjas. Ninguém reclamou muito.',
+  ],
+  ironfall_gate: [
+    'O Portão da Encosta é o único ponto onde Ironfall admite que tem um limite. Os guardas aqui parecem diferentes dos da cidade — mais quietos, com olhos que ficam no horizonte mais do que nas pessoas que passam.',
+    'Entre a cidade e o que vem depois, o portão. A madeira reforçada com ferro tem marcas que podem ser arranhões de animais grandes, ou ferramentas mal manuseadas. Ninguém pergunta.',
+    'Há uma placa velha no portal que diz algo que o tempo tornou ilegível. Alguém tentou cobri-la com uma nova, mas a nova caiu. O que ficou da original parece começar com uma letra que pode ser um V, ou um Y.',
+  ],
+  cinzas_forest: [
+    'A Floresta das Cinzas não tem esse nome por acidente. As árvores são de um cinza desbotado que não parece doença nem morte — parece esquecimento. O chão absorve o som dos passos de um jeito que incomoda mais do que deveria.',
+    'Há trilhas aqui que não estão em nenhum mapa de Ironfall. Algumas parecem antigas. Uma delas, a nordeste, tem pedras dispostas de um jeito que pode ser natural, ou pode ter sido alguém que queria marcar algo sem chamar atenção.',
+    'Os caçadores de Ironfall evitam a Floresta das Cinzas depois do meio-dia. Quando perguntados por quê, a maioria muda de assunto. Um velho disse uma vez que "o que vive aqui aprendeu a esperar" — e não explicou mais.',
+  ],
+  burnt_tower: [
+    'Três paredes e parte do teto. O fogo que passou aqui foi intenso e deliberado — as marcas na pedra mostram que o centro queimou por mais tempo do que as bordas. Alguém queria ter certeza.',
+    'Os escombros foram vasculhados antes. Há objetos deslocados, pilhas organizadas de destroços que não fazem sentido numa ruína abandonada. Alguém esteve aqui procurando algo — ou escondendo.',
+    'Da janela que ainda existe, dá para ver a linha da floresta a leste. E entre as árvores, nas noites com pouca névoa, moradores de Ironfall juram que já viram uma luz que não era da lua. Ninguém foi verificar.',
+  ],
+  bell_cave: [
+    'A entrada é mais estreita do que parece de longe. Por dentro, o teto sobe abruptamente e o espaço se abre. O silêncio aqui é diferente — não é ausência de som, é uma presença de algo que contém o som.',
+    'As paredes da gruta têm marcas. Algumas são claramente naturais — erosão, minerais. Outras têm uma regularidade que a natureza raramente produz. Estão baixas demais para serem acidentais e altas demais para serem de uma criança.',
+    'Há um cheiro aqui que não é terra, não é pedra, não é animal. É algo metálico mas orgânico ao mesmo tempo. Quem conhece fundições diz que lembra cobre aquecido. Quem não conhece apenas sabe que não gosta.',
+  ],
+};
+
+// Sufixos de hora
+const HOUR_SUFFIXES = {
+  morning: [
+    ' A luz da manhã chega filtrada e fria.',
+    ' O amanhecer traz um silêncio que dura pouco.',
+    ' Ainda cedo — o dia não decidiu o que vai ser.',
+  ],
+  night: [
+    ' A noite fecha os espaços e abre outras possibilidades.',
+    ' Escuro o suficiente para que coisas aconteçam sem testemunhas.',
+    ' À noite, tudo aqui parece um grau mais perigoso do que durante o dia.',
+  ],
+};
+
+// Sufixos de clima — substitui ou complementa o sufixo de hora
+const WEATHER_SUFFIXES = {
+  clear:      null, // sem sufixo extra, usa só o de hora
+  rain:       ' A chuva cobre os sons e borra os detalhes.',
+  heavy_rain: ' A chuva forte dificulta ver além de alguns metros.',
+  fog:        ' A névoa baixa reduz a visibilidade e traz um frio úmido.',
+  storm:      ' A tempestade faz o ambiente vibrar com trovões distantes.',
+  snow:       ' A neve abafa os sons e deixa rastros de quem passou.',
+};
+
+// Função principal de narração
+function getNodeNarration(key, phase, weather, seed) {
+  const descriptions = NODE_DESCRIPTIONS[key];
+  if (!descriptions) return 'Você observa o ambiente ao redor.';
+
+  // Usa o seed para sortear a descrição — mesmo seed = mesma descrição
+  // Isso garante que a descrição não mude enquanto o jogador está no local
+  const index       = seed % descriptions.length;
+  const description = descriptions[index];
+
+  // Sufixo de clima sobrepõe hora se existir
+  const weatherSuffix = weather ? WEATHER_SUFFIXES[weather] : null;
+  const hourOptions   = HOUR_SUFFIXES[phase] || HOUR_SUFFIXES.morning;
+  const hourSuffix    = hourOptions[seed % hourOptions.length];
+
+  const suffix = weatherSuffix !== null && weatherSuffix !== undefined
+    ? weatherSuffix
+    : hourSuffix;
+
+  return description + suffix;
+}
+
+// ─── Componente principal ────────────────────────────────────────────
+export default function Game() {
+  const navigate              = useNavigate();
+  const { character, logout } = useGame();
+  const [gameState, setGameState]     = useState(null);
+  const [showIntro, setShowIntro]     = useState(false);
+  const [currentPage, setCurrentPage] = useState('world');
+  const [loading, setLoading]         = useState(true);
+  const [moving, setMoving]           = useState(false);
+  const [narrationSeed, setNarrationSeed] = useState(() => Math.floor(Math.random() * 1000));
+
+  useEffect(() => {
+    if (!character) { navigate('/characters'); return; }
+    loadGameState();
+  }, [character]);
+
+  useEffect(() => {
+    if (!character || !gameState) return;
+    const interval = setInterval(() => {
+      characterService.heartbeat(character.id).catch(() => {});
+    }, 2 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [character, gameState]);
+
+  useEffect(() => {
+    if (!character) return;
+    function handleUnload() {
+      characterService.goOffline(character.id).catch(() => {});
+    }
+    window.addEventListener('beforeunload', handleUnload);
+    return () => window.removeEventListener('beforeunload', handleUnload);
+  }, [character]);
+
+  async function loadGameState() {
+    try {
+      const { data } = await characterService.enter(character.id);
+      setGameState(data);
+      setShowIntro(data.isFirstLogin);
+    } catch (err) {
+      console.error('Erro ao entrar no jogo:', err);
+      navigate('/characters');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // handleMove fica aqui — tem acesso a character, setGameState e setCurrentPage
+  async function handleMove(toNodeId) {
+    if (moving) return;
+	console.log('character no contexto:', character);
+    console.log('token no localStorage:', localStorage.getItem('krakovia_token'));
+    setMoving(true);
+    try {
+      await characterService.move(character.id, toNodeId);
+      const { data } = await characterService.enter(character.id);
+      setGameState(data);
+      setCurrentPage('world');
+	  setNarrationSeed(Math.floor(Math.random() * 1000));
+    } catch (err) {
+      const message = err.response?.data?.error || 'Erro ao se mover.';
+      alert(message);
+    } finally {
+      setMoving(false);
+    }
+  }
+
+  function handleLogout() {
+    if (character) {
+      characterService.goOffline(character.id).catch(() => {});
+    }
+    logout();
+    navigate('/login');
+  }
+
+  if (loading) return (
+    <div style={{
+      display: 'flex', alignItems: 'center',
+      justifyContent: 'center', height: '100vh', color: '#c9a84c'
+    }}>
+      Carregando...
+    </div>
+  );
+
+  if (showIntro) return (
+    <IntroScreen
+      characterName={gameState.character.name}
+      onContinue={() => setShowIntro(false)}
+    />
+  );
+
+  const char    = gameState.character;
+  const derived = char?.character_derived || {};
+
+  function renderCenterPage() {
+    switch (currentPage) {
+      case 'world':
+	    return <PageWorld
+           node={gameState.node}
+		   clock={gameState.clock}
+		   narrationSeed={narrationSeed}
+		/>;
+      case 'character':
+        return <PageCharacter character={char} inventory={gameState.inventory || []} />;
+      case 'inventory':
+        return <PageInventory inventory={gameState.inventory || []} derived={derived} />;
+      case 'quests':
+        return <PageUnderConstruction label="Missões" />;
+      case 'documents':
+        return <PageUnderConstruction label="Documentos" />;
+      case 'skills':
+        return <PageUnderConstruction label="Perícias e Habilidades" />;
+      default:
+        return <PageWorld node={gameState.node} clock={gameState.clock} />;
+    }
+  }
+
+  return (
+    <div className="game-layout">
+      <PanelLeft
+        character={char}
+        currentPage={currentPage}
+        onNavigate={setCurrentPage}
+        onLogout={handleLogout}
+      />
+      <div className="panel panel-center">
+        {moving && (
+          <div className="moving-overlay">
+            <span className="text-dim font-narrative">Viajando...</span>
+          </div>
+        )}
+        {renderCenterPage()}
+      </div>
+      <PanelRight
+        node={gameState.node}
+        connections={gameState.connections}
+        npcs={gameState.npcs}
+        activeQuests={gameState.activeQuests}
+        onlinePlayers={gameState.onlinePlayers || []}
+        onMove={handleMove}
+      />
+    </div>
+  );
+}

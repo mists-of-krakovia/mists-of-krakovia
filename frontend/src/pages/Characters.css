@@ -1,0 +1,275 @@
+/* ── Seleção ── */
+.char-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+  gap: 32px;
+}
+
+.char-header { text-align: center; }
+
+.char-title {
+  font-size: 20px;
+  letter-spacing: 4px;
+  color: var(--color-gold);
+  margin-bottom: 8px;
+}
+
+.char-subtitle { font-size: 14px; }
+
+.char-slots {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: 900px;
+  width: 100%;
+}
+
+.char-slot {
+  width: 160px;
+  min-height: 200px;
+  border-radius: var(--radius-lg);
+  padding: 20px 16px;
+  cursor: pointer;
+  transition: border-color 0.2s, transform 0.15s;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.char-slot.occupied {
+  background: var(--color-bg-panel);
+  border: 1px solid var(--color-border);
+}
+
+.char-slot.occupied:hover {
+  border-color: var(--color-gold-dim);
+  transform: translateY(-2px);
+}
+
+.char-slot.empty {
+  background: var(--color-bg-card);
+  border: 1px dashed var(--color-border);
+  align-items: center;
+  justify-content: center;
+}
+
+.char-slot.empty:hover {
+  border-color: var(--color-gold-dim);
+}
+
+.slot-class   { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+.slot-name    { font-size: 16px; font-weight: 500; }
+.slot-meta    { font-size: 11px; }
+.slot-stats   { display: flex; flex-direction: column; gap: 2px; font-size: 11px;
+                color: var(--color-text-dim); margin-top: 4px; }
+.slot-action  { margin-top: auto; font-size: 11px; color: var(--color-gold-dim); }
+.slot-empty-icon  { font-size: 28px; color: var(--color-border); }
+.slot-empty-label { font-size: 12px; }
+
+.btn-ghost {
+  background: none;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-dim);
+  padding: 8px 20px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 12px;
+  font-family: var(--font-ui);
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.btn-ghost:hover {
+  border-color: var(--color-gold-dim);
+  color: var(--color-text);
+}
+
+/* ── Criação ── */
+.create-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+}
+
+.create-card {
+  width: 100%;
+  max-width: 480px;
+  background: var(--color-bg-panel);
+  border: 1px solid var(--color-border-gold);
+  border-radius: var(--radius-lg);
+  padding: 40px 32px;
+}
+
+.create-card.wide { max-width: 860px; }
+
+.create-step-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 8px;
+}
+
+.create-title {
+  font-size: 20px;
+  color: var(--color-gold);
+  margin-bottom: 12px;
+}
+
+.create-desc {
+  font-size: 15px;
+  margin-bottom: 24px;
+  line-height: 1.7;
+}
+
+.create-input {
+  width: 100%;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 12px;
+  color: var(--color-text);
+  font-size: 18px;
+  font-family: var(--font-narrative);
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.create-input:focus { border-color: var(--color-gold-dim); }
+
+.create-char-count {
+  text-align: right;
+  font-size: 11px;
+  margin-top: 4px;
+  margin-bottom: 24px;
+}
+
+.create-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 28px;
+  gap: 12px;
+}
+
+/* Classes */
+.class-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.class-card {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 16px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.class-card:hover   { border-color: var(--color-gold-dim); }
+.class-card.selected { border-color: var(--color-gold); }
+
+.class-label    { font-size: 13px; font-weight: 500;
+                  text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px; }
+.class-subtitle { font-size: 11px; margin-bottom: 10px; }
+.class-desc     { font-size: 13px; line-height: 1.6; margin-bottom: 10px; }
+.class-skills   { font-size: 11px; }
+
+/* Atributos */
+.attr-list      { display: flex; flex-direction: column; gap: 12px; margin-bottom: 8px; }
+
+.attr-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.attr-info      { display: flex; flex-direction: column; gap: 2px; }
+.attr-label     { font-size: 13px; }
+.attr-desc      { font-size: 11px; max-width: 220px; }
+
+.attr-control   { display: flex; align-items: center; gap: 12px; }
+
+.attr-btn {
+  width: 28px; height: 28px;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  transition: border-color 0.2s;
+}
+
+.attr-btn:hover:not(:disabled)  { border-color: var(--color-gold-dim); }
+.attr-btn:disabled               { opacity: 0.3; cursor: not-allowed; }
+
+.attr-value     { font-size: 15px; min-width: 60px; text-align: center; }
+.attr-numeric   { font-size: 11px; }
+
+/* Revisão */
+.review-block {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.review-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-size: 14px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.review-row:last-child { border-bottom: none; }
+
+.review-attrs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.review-attr-row {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 10px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.review-warning {
+  font-size: 13px;
+  text-align: center;
+  margin-bottom: 4px;
+  font-style: italic;
+}
+
+/* Sanidade derivada */
+.attr-row.derived {
+  opacity: 0.7;
+}
+
+.attr-derived-badge {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-left: 6px;
+  vertical-align: middle;
+}

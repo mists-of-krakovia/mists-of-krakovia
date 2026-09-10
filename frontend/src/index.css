@@ -1,0 +1,63 @@
+/* Importa fonte narrativa */
+@import url('https://fonts.googleapis.com/css2?family=Crimson+Text:ital,wght@0,400;0,600;1,400&family=Inter:wght@300;400;500&display=swap');
+
+/* Variáveis de cor — paleta Krakóvia */
+:root {
+  --color-bg:          #0d0d0d;
+  --color-bg-panel:    #111111;
+  --color-bg-card:     #161616;
+  --color-border:      #2a2a2a;
+  --color-border-gold: #4a3a1a;
+
+  --color-gold:        #c9a84c;
+  --color-gold-dim:    #7a6030;
+  --color-rust:        #8b3a2a;
+  --color-mist:        #4a5568;
+
+  --color-text:        #d4d0c8;
+  --color-text-dim:    #6b6860;
+  --color-text-gold:   #c9a84c;
+  --color-text-danger: #c53030;
+  --color-text-safe:   #2f855a;
+
+  --font-narrative: 'Crimson Text', Georgia, serif;
+  --font-ui:        'Inter', system-ui, sans-serif;
+
+  --radius:    4px;
+  --radius-lg: 8px;
+}
+
+/* Reset base */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* Scrollbar discreta */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 2px;
+}
+
+/* Utilitários */
+.text-gold    { color: var(--color-gold); }
+.text-dim     { color: var(--color-text-dim); }
+.text-danger  { color: var(--color-text-danger); }
+.text-safe    { color: var(--color-text-safe); }
+.font-narrative { font-family: var(--font-narrative); }
