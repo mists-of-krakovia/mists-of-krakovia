@@ -33,7 +33,8 @@ router.get('/clock', async (req, res) => {
     currentPhase,
     secondsUntilNextPhase: Math.floor(secondsUntilNextPhase),
     dayDurationSeconds: data.day_duration_seconds,
-    nightDurationSeconds: data.night_duration_seconds
+    nightDurationSeconds: data.night_duration_seconds,
+    current_weather: data.current_weather || 'clear'
   });
 });
 

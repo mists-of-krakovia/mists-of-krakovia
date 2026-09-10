@@ -37,13 +37,14 @@ const CLASS_INFO = {
   }
 };
 
-// Sanidade removida — agora é derivada de INT + PER
+// Sanidade é o 6º atributo base (Volume III): resistência mental e à névoa.
 const ATTR_LABELS = {
   strength:   { label: 'Força',       abbr: 'FOR', desc: 'Dano corpo a corpo e capacidade de carga.' },
   agility:    { label: 'Agilidade',   abbr: 'AGI', desc: 'Iniciativa, evasão e velocidade.' },
   resistance: { label: 'Resistência', abbr: 'RES', desc: 'Pontos de vida e estamina máxima.' },
-  intellect:  { label: 'Intelecto',   abbr: 'INT', desc: 'Perícias técnicas. Contribui para Sanidade.' },
-  perception: { label: 'Percepção',   abbr: 'PER', desc: 'Acerto à distância e detecção de segredos. Contribui para Sanidade.' }
+  intellect:  { label: 'Intelecto',   abbr: 'INT', desc: 'Perícias técnicas e observação.' },
+  perception: { label: 'Percepção',   abbr: 'PER', desc: 'Acerto à distância e detecção de segredos.' },
+  sanity:     { label: 'Sanidade',    abbr: 'SAN', desc: 'Resistência mental e à névoa. Sustenta você na Névoa.' }
 };
 
 const GRADE_LABELS = {
@@ -123,7 +124,7 @@ function CharacterCreate({ onCancel, onCreated }) {
   const [selectedClass, setSelectedClass] = useState('');
   const [attributes, setAttributes]       = useState({
     strength: 0, agility: 0, resistance: 0,
-    intellect: 0, perception: 0
+    intellect: 0, perception: 0, sanity: 0
   });
   const [error, setError]     = useState('');
   const [loading, setLoading] = useState(false);
@@ -134,6 +135,7 @@ function CharacterCreate({ onCancel, onCreated }) {
   function adjustAttr(key, delta) {
     const next = attributes[key] + delta;
     if (next < 0) return;
+    if (next > 4) return; // teto D+ na criação (base E=5 + 4 = D+=9)
     if (delta > 0 && pointsLeft === 0) return;
     setAttributes(prev => ({ ...prev, [key]: next }));
   }
@@ -241,7 +243,7 @@ function CharacterCreate({ onCancel, onCreated }) {
                     <button
                       className="attr-btn"
                       onClick={() => adjustAttr(key, 1)}
-                      disabled={pointsLeft === 0}
+                      disabled={pointsLeft === 0 || attributes[key] >= 4}
                     >+</button>
                   </div>
                 </div>

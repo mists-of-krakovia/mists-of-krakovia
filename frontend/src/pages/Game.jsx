@@ -201,6 +201,7 @@ function PageCharacter({ character, inventory }) {
     { abbr: 'RES', label: 'Resistência', val: attrs.resistance },
     { abbr: 'INT', label: 'Intelecto',   val: attrs.intellect  },
     { abbr: 'PER', label: 'Percepção',   val: attrs.perception },
+    { abbr: 'SAN', label: 'Sanidade',    val: attrs.sanity     },
   ];
 
   const derivedAttrs = [
@@ -218,8 +219,6 @@ function PageCharacter({ character, inventory }) {
     { label: 'R. Mental',        val: derived.mental_resistance ?? '—' },
     { label: 'R. Névoa',         val: derived.mist_resistance   ?? '—' },
     { label: 'Carga máx.',       val: derived.carry_capacity ? `${derived.carry_capacity}kg` : '—' },
-    { label: 'Sanidade',         val: derived.mental_resistance
-        ? Math.round(derived.mental_resistance / 3) : '—' },
   ];
 
   return (
@@ -641,8 +640,6 @@ export default function Game() {
   // handleMove fica aqui — tem acesso a character, setGameState e setCurrentPage
   async function handleMove(toNodeId) {
     if (moving) return;
-	console.log('character no contexto:', character);
-    console.log('token no localStorage:', localStorage.getItem('krakovia_token'));
     setMoving(true);
     try {
       await characterService.move(character.id, toNodeId);

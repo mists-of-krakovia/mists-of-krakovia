@@ -56,23 +56,68 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ error: 'Classe inválida.' });
   }
 
-  // Bug 3 corrigido — sanity removida da validação
-  const attrKeys = ['strength', 'agility', 'resistance', 'intellect', 'perception'];
-  const totalSpent = attrKeys.reduce((sum, key) => sum + (attributes[key] || 0), 0);
+  // Sanidade é o 6º atributo base (Volume III). Distribuição: 5 pontos entre
+  // os 6 atributos, cada um começando no grau E (valor 5). Nenhum pode passar
+  // de D+ (valor 9) na criação -> no máximo +4 pontos num único atributo.
+  const attrKeys = ['strength', 'agility', 'resistance', 'intellect', 'perception', 'sanity'];
+  const spent = {};
+  let totalSpent = 0;
+  for (const key of attrKeys) {
+    const v = attributes?.[key] || 0;
+    if (!Number.isInteger(v) || v < 0) {
+      return res.status(400).json({ error: `Valor inválido para o atributo ${key}.` });
+    }
+    if (v > 4) {
+      return res.status(400).json({ error: 'Nenhum atributo pode começar acima de D+ (máximo +4 na criação).' });
+    }
+    spent[key] = v;
+    totalSpent += v;
+  }
 
   if (totalSpent > 5) {
     return res.status(400).json({ error: 'Pontos de atributo excedidos. Máximo: 5.' });
   }
 
   const finalAttributes = {
-    strength:         5 + (attributes.strength   || 0),
-    agility:          5 + (attributes.agility    || 0),
-    resistance:       5 + (attributes.resistance || 0),
-    intellect:        5 + (attributes.intellect  || 0),
-    perception:       5 + (attributes.perception || 0),
-    sanity:           0,
+    strength:         5 + spent.strength,
+    agility:          5 + spent.agility,
+    resistance:       5 + spent.resistance,
+    intellect:        5 + spent.intellect,
+    perception:       5 + spent.perception,
+    sanity:           5 + spent.sanity,
     points_available: 5 - totalSpent
   };
+
+  // Nó inicial: Ironfall — Distrito Central. Buscado por description_key
+  // (identificador estável), com fallback para o primeiro settlement seguro
+  // da região. Evita depender de um UUID fixo hardcoded.
+  let startNode = null;
+  {
+    const { data: byKey } = await supabase
+      .from('world_nodes')
+      .select('id')
+      .eq('description_key', 'ironfall_central')
+      .maybeSingle();
+    startNode = byKey;
+
+    if (!startNode) {
+      const { data: fallback } = await supabase
+        .from('world_nodes')
+        .select('id')
+        .eq('node_type', 'settlement')
+        .eq('is_safe_zone', true)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      startNode = fallback;
+    }
+  }
+
+  if (!startNode) {
+    return res.status(500).json({ error: 'Nó inicial do mundo não encontrado. O mundo pode não ter sido populado.' });
+  }
+
+  const startNodeId = startNode.id;
 
   const { data: character, error: charError } = await supabase
     .from('characters')
@@ -83,8 +128,8 @@ router.post('/', async (req, res) => {
       level:              1,
       xp:                 0,
       xp_to_next:         100,
-      current_node_id:    'a1b2c3d4-0001-0001-0001-000000000001',
-      last_settlement_id: 'a1b2c3d4-0001-0001-0001-000000000001',
+      current_node_id:    startNodeId,
+      last_settlement_id: startNodeId,
       is_active:          false
     })
     .select()
@@ -107,7 +152,7 @@ router.post('/', async (req, res) => {
     .from('character_discovered_nodes')
     .insert({
       character_id: character.id,
-      node_id:      'a1b2c3d4-0001-0001-0001-000000000001',
+      node_id:      startNodeId,
       discovered_at: new Date().toISOString()
     });
 
@@ -299,6 +344,18 @@ router.put('/:characterId/heartbeat', async (req, res) => {
 // PUT /characters/:characterId/offline
 router.put('/:characterId/offline', async (req, res) => {
   const { characterId } = req.params;
+
+  // Valida que o personagem pertence à conta autenticada antes de alterar a sessão.
+  const { data: character } = await supabase
+    .from('characters')
+    .select('id')
+    .eq('id', characterId)
+    .eq('account_id', req.userId)
+    .single();
+
+  if (!character) {
+    return res.status(404).json({ error: 'Personagem não encontrado.' });
+  }
 
   await supabase
     .from('character_sessions')
