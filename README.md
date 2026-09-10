@@ -50,6 +50,25 @@ cd frontend ; npm run dev
 O schema é versionado em `supabase/`. Veja **[supabase/README.md](supabase/README.md)**
 para o fluxo de migrations e sincronização com o projeto remoto.
 
+## Ambiente Windows com antivírus que inspeciona HTTPS (Avast/ESET/etc.)
+
+Se o antivírus fizer inspeção TLS, o Node não confia na cadeia reassinada e as
+chamadas ao Supabase falham com `fetch failed` / `UNABLE_TO_VERIFY_LEAF_SIGNATURE`.
+
+Solução (por máquina, não versionada):
+
+1. Exporte o certificado raiz do antivírus (ex.: "Avast Web/Mail Shield Root")
+   do repositório de certificados do Windows para `certs/<nome>.pem`.
+2. Aponte o Node para ele, de forma persistente:
+   ```powershell
+   [Environment]::SetEnvironmentVariable("NODE_EXTRA_CA_CERTS", "<caminho-absoluto>\certs\avast-root.pem", "User")
+   ```
+   Abra um terminal novo depois de definir.
+3. Adicione a pasta do projeto às **exceções** do antivírus, para ele não
+   virtualizar/interromper o processo `node.exe`.
+
+A pasta `certs/` é ignorada pelo Git (específica de cada máquina).
+
 ## Documentação de design
 
 Os PDFs em `docs/` são a especificação do jogo (fonte de verdade de design):

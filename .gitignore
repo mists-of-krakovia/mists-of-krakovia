@@ -36,6 +36,11 @@ logs/
 .DS_Store
 Thumbs.db
 
+# ─── Certificados locais da máquina ───────────────────────────────────
+# Ex.: raiz do Avast/antivírus para NODE_EXTRA_CA_CERTS. Específico de cada
+# máquina — não versionar. Ver README (seção de ambiente Windows/Avast).
+certs/
+
 # ─── Diversos ─────────────────────────────────────────────────────────
 _tmp_pdf/
 coverage/
