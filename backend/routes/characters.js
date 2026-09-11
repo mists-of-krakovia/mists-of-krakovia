@@ -3,6 +3,14 @@ const router = express.Router();
 const { supabase } = require('../server');
 const { calculateDerived } = require('../services/character');
 const { authenticateToken } = require('../services/auth');
+const {
+  INITIAL_SKILLS_BY_CLASS,
+  INITIAL_SKILL_LEVEL,
+  INITIAL_COMBAT_POINTS,
+  MAX_SKILL_LEVEL,
+  initialFieldPoints,
+  validateAllocation,
+} = require('../services/skills');
 
 router.use(authenticateToken);
 
@@ -141,14 +149,79 @@ router.post('/', async (req, res) => {
     return res.status(500).json({ error: 'Erro ao criar personagem.' });
   }
 
+  // ── Perícias ────────────────────────────────────────────────────────
+  // Pontos iniciais: campo = 1 + MG_INT; combate = 3 livres (Volume III).
+  const availablePoints = {
+    field:  initialFieldPoints(finalAttributes.intellect),
+    combat: INITIAL_COMBAT_POINTS,
+  };
+
+  // Níveis de partida: as 3 perícias de combate da classe começam no nível 2.
+  const classInitial = INITIAL_SKILLS_BY_CLASS[characterClass] || [];
+  const levels = {}; // slug -> nível
+  const typeOf = {}; // slug -> 'combat' (as iniciais são todas de combate)
+  for (const slug of classInitial) {
+    levels[slug] = INITIAL_SKILL_LEVEL;
+    typeOf[slug] = 'combat';
+  }
+
+  // Alocação opcional enviada pelo cliente na criação.
+  const alloc = req.body.skills || { field: {}, combat: {} };
+
+  const { data: catalog } = await supabase
+    .from('skills_catalog')
+    .select('slug, name, skill_type, base_attr, base_attr_alt, requires_training, attr_mg_req');
+
+  const validation = validateAllocation({
+    catalog: catalog || [],
+    attributes: finalAttributes,
+    currentLevels: levels,
+    alloc,
+    available: availablePoints,
+  });
+
+  if (!validation.ok) {
+    // Personagem já foi inserido; reverte para não deixar registro órfão.
+    await supabase.from('characters').delete().eq('id', character.id);
+    return res.status(400).json({ error: validation.error });
+  }
+
+  // Aplica os deltas validados sobre os níveis de partida.
+  for (const a of validation.applied) {
+    levels[a.slug] = (levels[a.slug] ?? 0) + a.delta;
+    typeOf[a.slug] = a.skill_type;
+  }
+
+  const remaining = {
+    field:  availablePoints.field  - validation.spent.field,
+    combat: availablePoints.combat - validation.spent.combat,
+  };
+
   await supabase
     .from('character_attributes')
-    .insert({ character_id: character.id, ...finalAttributes });
+    .insert({
+      character_id: character.id,
+      ...finalAttributes,
+      field_skill_points:  remaining.field,
+      combat_skill_points: remaining.combat,
+    });
 
   const derived = calculateDerived(finalAttributes);
   await supabase
     .from('character_derived')
     .insert({ character_id: character.id, ...derived });
+
+  // Insere as perícias resultantes (iniciais + investidas).
+  const skillRows = Object.keys(levels).map(slug => ({
+    character_id: character.id,
+    skill_name:   slug,
+    skill_type:   typeOf[slug],
+    level:        levels[slug],
+    xp:           0,
+  }));
+  if (skillRows.length > 0) {
+    await supabase.from('character_skills').insert(skillRows);
+  }
 
   await supabase
     .from('character_discovered_nodes')
@@ -369,6 +442,95 @@ router.put('/:characterId/offline', async (req, res) => {
     .eq('character_id', characterId);
 
   res.json({ ok: true });
+});
+
+// POST /characters/:characterId/skills/allocate
+// Distribui pontos de perícia disponíveis (campo/combate). Body:
+// { field: { <slug>: deltaPts }, combat: { <slug>: deltaPts } }
+router.post('/:characterId/skills/allocate', async (req, res) => {
+ try {
+  const { characterId } = req.params;
+  const alloc = req.body || { field: {}, combat: {} };
+
+  // Propriedade + atributos (para requisito e pontos disponíveis)
+  const { data: character } = await supabase
+    .from('characters')
+    .select('id, character_attributes (*), character_skills (*)')
+    .eq('id', characterId)
+    .eq('account_id', req.userId)
+    .single();
+
+  if (!character) {
+    return res.status(404).json({ error: 'Personagem não encontrado.' });
+  }
+
+  const attrs = character.character_attributes || {};
+  const available = {
+    field:  attrs.field_skill_points  ?? 0,
+    combat: attrs.combat_skill_points ?? 0,
+  };
+
+  const currentLevels = {};
+  for (const s of character.character_skills || []) {
+    currentLevels[s.skill_name] = s.level;
+  }
+
+  const { data: catalog } = await supabase
+    .from('skills_catalog')
+    .select('slug, name, skill_type, base_attr, base_attr_alt, requires_training, attr_mg_req');
+
+  const validation = validateAllocation({
+    catalog: catalog || [],
+    attributes: attrs,
+    currentLevels,
+    alloc,
+    available,
+  });
+
+  if (!validation.ok) {
+    return res.status(400).json({ error: validation.error });
+  }
+
+  if (validation.applied.length === 0) {
+    return res.status(400).json({ error: 'Nenhum ponto distribuído.' });
+  }
+
+  // Aplica cada perícia (upsert por character_id + skill_name).
+  const catalogBySlug = {};
+  for (const row of catalog || []) catalogBySlug[row.slug] = row;
+
+  for (const a of validation.applied) {
+    await supabase
+      .from('character_skills')
+      .upsert({
+        character_id: characterId,
+        skill_name:   a.slug,
+        skill_type:   catalogBySlug[a.slug].skill_type,
+        level:        a.newLevel,
+      }, { onConflict: 'character_id,skill_name' });
+  }
+
+  // Debita os pontos gastos.
+  await supabase
+    .from('character_attributes')
+    .update({
+      field_skill_points:  available.field  - validation.spent.field,
+      combat_skill_points: available.combat - validation.spent.combat,
+    })
+    .eq('character_id', characterId);
+
+  res.json({
+    ok: true,
+    remaining: {
+      field:  available.field  - validation.spent.field,
+      combat: available.combat - validation.spent.combat,
+    },
+    applied: validation.applied,
+  });
+ } catch (err) {
+   console.error('[allocate] EXCEPTION:', err && err.message);
+   res.status(500).json({ error: 'Erro ao distribuir perícias.' });
+ }
 });
 
 // POST /characters/:characterId/move

@@ -43,11 +43,20 @@ export const characterService = {
   list: () =>
     api.get('/characters'),
 
-  create: (name, characterClass, attributes) =>
-    api.post('/characters', { name, characterClass, attributes }),
+  create: (name, characterClass, attributes, skills) =>
+    api.post('/characters', { name, characterClass, attributes, skills }),
 
   enter: (characterId) =>
-    api.post(`/characters/${characterId}/enter`)
+    api.post(`/characters/${characterId}/enter`),
+
+  allocateSkills: (characterId, alloc) =>
+    api.post(`/characters/${characterId}/skills/allocate`, alloc)
+};
+
+// Perícias
+export const skillService = {
+  getCatalog: () =>
+    api.get('/skills/catalog')
 };
 
 // Mundo

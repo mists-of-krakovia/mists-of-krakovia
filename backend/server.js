@@ -34,10 +34,12 @@ app.get('/health', (req, res) => {
 const authRoutes = require('./routes/auth');
 const characterRoutes = require('./routes/characters');
 const worldRoutes = require('./routes/world');
+const skillRoutes = require('./routes/skills');
 
 app.use('/auth', authRoutes);
 app.use('/characters', characterRoutes);
 app.use('/world', worldRoutes);
+app.use('/skills', skillRoutes);
 
 // Inicia o servidor
 app.listen(PORT, () => {

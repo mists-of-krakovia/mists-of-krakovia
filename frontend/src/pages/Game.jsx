@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGame } from '../context/GameContext';
-import { characterService } from '../services/api';
+import { characterService, skillService } from '../services/api';
 import './Game.css';
 
 const INTRO_TEXT = `Você chegou a Ironfall antes do amanhecer.
@@ -41,6 +41,22 @@ const GRADE = [
 ];
 
 function grade(val) { return GRADE[val] || val || '—'; }
+
+// Modificador Grande (letra) de um atributo (1..21) -> 1..7.
+function mgOf(value) { return Math.max(1, Math.ceil(value / 3)); }
+
+const SKILL_ATTR_ABBR = {
+  strength: 'FOR', agility: 'AGI', resistance: 'RES',
+  intellect: 'INT', perception: 'PER', sanity: 'SAN'
+};
+
+function skillReqMet(skill, attrs) {
+  const req = skill.attr_mg_req || 0;
+  if (req <= 0) return true;
+  const a = mgOf(attrs[skill.base_attr] ?? 0);
+  const b = skill.base_attr_alt ? mgOf(attrs[skill.base_attr_alt] ?? 0) : 0;
+  return Math.max(a, b) >= req;
+}
 
 // ─── Introdução ──────────────────────────────────────────────────────
 function IntroScreen({ characterName, onContinue }) {
@@ -375,6 +391,123 @@ function PageInventory({ inventory, derived }) {
   );
 }
 
+// ─── Página: Perícias ────────────────────────────────────────────────
+function PageSkills({ character, catalog, onAllocated }) {
+  const attrs   = character?.character_attributes || {};
+  const owned   = character?.character_skills || [];
+  const levelBySlug = {};
+  owned.forEach(s => { levelBySlug[s.skill_name] = s.level; });
+
+  const fieldAvail  = attrs.field_skill_points  ?? 0;
+  const combatAvail = attrs.combat_skill_points ?? 0;
+
+  // Alocação pendente (ainda não confirmada): { field:{slug:pts}, combat:{slug:pts} }
+  const [pending, setPending] = useState({ field: {}, combat: {} });
+  const [saving, setSaving]   = useState(false);
+  const [error, setError]     = useState('');
+
+  const fieldSpent  = Object.values(pending.field).reduce((a, b) => a + b, 0);
+  const combatSpent = Object.values(pending.combat).reduce((a, b) => a + b, 0);
+  const fieldLeft   = fieldAvail  - fieldSpent;
+  const combatLeft  = combatAvail - combatSpent;
+  const hasPending  = fieldSpent > 0 || combatSpent > 0;
+
+  function adjust(type, slug, delta) {
+    const cur = pending[type][slug] || 0;
+    const next = cur + delta;
+    if (next < 0) return;
+    const left = type === 'field' ? fieldLeft : combatLeft;
+    if (delta > 0 && left === 0) return;
+    const currentLevel = (levelBySlug[slug] || 0) + cur;
+    if (delta > 0 && currentLevel >= 10) return;
+    setPending(prev => ({ ...prev, [type]: { ...prev[type], [slug]: next } }));
+  }
+
+  async function confirm() {
+    if (!hasPending) return;
+    setSaving(true);
+    setError('');
+    try {
+      await onAllocated(pending);
+      setPending({ field: {}, combat: {} });
+    } catch (err) {
+      setError(err.response?.data?.error || 'Erro ao distribuir perícias.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function SkillRow({ skill, type }) {
+    const base = levelBySlug[skill.slug] || 0;
+    const add  = pending[type][skill.slug] || 0;
+    const level = base + add;
+    const met = skillReqMet(skill, attrs);
+    const left = type === 'field' ? fieldLeft : combatLeft;
+    return (
+      <div className="derived-table-row" style={!met ? { opacity: 0.5 } : undefined} title={skill.description || ''}>
+        <span className="derived-label">
+          {skill.name}
+          <span className="text-dim">
+            {' · '}{SKILL_ATTR_ABBR[skill.base_attr]}
+            {skill.base_attr_alt ? `/${SKILL_ATTR_ABBR[skill.base_attr_alt]}` : ''}
+            {skill.attr_mg_req > 0 ? ` · req ${SKILL_ATTR_ABBR[skill.base_attr]} ${'FEDCBAS'[skill.attr_mg_req - 1]}` : ''}
+          </span>
+        </span>
+        <span className="attr-control" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button className="attr-btn" onClick={() => adjust(type, skill.slug, -1)} disabled={add === 0}>−</button>
+          <span className="derived-val" style={add > 0 ? { color: 'var(--color-gold)' } : undefined}>{level}</span>
+          <button className="attr-btn" onClick={() => adjust(type, skill.slug, 1)} disabled={!met || left === 0 || level >= 10}>+</button>
+        </span>
+      </div>
+    );
+  }
+
+  const fieldSkills  = (catalog || []).filter(s => s.skill_type === 'field');
+  const combatSkills = (catalog || []).filter(s => s.skill_type === 'combat');
+
+  return (
+    <div className="page-content">
+      <div className="page-header">
+        <h2 className="page-title text-gold">Perícias</h2>
+        <p className="page-subtitle text-dim">
+          Combate: {combatLeft} · Campo: {fieldLeft} ponto(s) a distribuir
+        </p>
+      </div>
+
+      {(catalog || []).length === 0 && (
+        <p className="text-dim font-narrative">Catálogo de perícias indisponível.</p>
+      )}
+
+      <div className="char-page-section">
+        <div className="section-label text-dim">Combate</div>
+        <div className="derived-table">
+          {combatSkills.map(s => <SkillRow key={s.slug} skill={s} type="combat" />)}
+        </div>
+      </div>
+
+      <div className="char-page-section">
+        <div className="section-label text-dim">Campo</div>
+        <div className="derived-table">
+          {fieldSkills.map(s => <SkillRow key={s.slug} skill={s} type="field" />)}
+        </div>
+      </div>
+
+      {error && <p className="login-error">{error}</p>}
+
+      {hasPending && (
+        <div className="create-actions" style={{ marginTop: 16 }}>
+          <button className="btn-ghost" onClick={() => setPending({ field: {}, combat: {} })} disabled={saving}>
+            Cancelar
+          </button>
+          <button className="btn-primary" onClick={confirm} disabled={saving}>
+            {saving ? 'Salvando...' : 'Confirmar distribuição'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Página: Em construção ───────────────────────────────────────────
 function PageUnderConstruction({ label }) {
   return (
@@ -601,6 +734,20 @@ export default function Game() {
   const [loading, setLoading]         = useState(true);
   const [moving, setMoving]           = useState(false);
   const [narrationSeed, setNarrationSeed] = useState(() => Math.floor(Math.random() * 1000));
+  const [skillCatalog, setSkillCatalog]   = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await skillService.getCatalog();
+        if (!cancelled) setSkillCatalog(data || []);
+      } catch (err) {
+        console.error('Erro ao carregar catálogo de perícias:', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const loadGameState = useCallback(async () => {
     try {
@@ -662,6 +809,12 @@ export default function Game() {
     }
   }
 
+  // Distribui pontos de perícia e recarrega o estado do jogo.
+  async function handleAllocateSkills(alloc) {
+    await characterService.allocateSkills(character.id, alloc);
+    await loadGameState();
+  }
+
   function handleLogout() {
     if (character) {
       characterService.goOffline(character.id).catch(() => {});
@@ -706,7 +859,11 @@ export default function Game() {
       case 'documents':
         return <PageUnderConstruction label="Documentos" />;
       case 'skills':
-        return <PageUnderConstruction label="Perícias e Habilidades" />;
+        return <PageSkills
+          character={char}
+          catalog={skillCatalog}
+          onAllocated={handleAllocateSkills}
+        />;
       default:
         return <PageWorld node={gameState.node} clock={gameState.clock} />;
     }
