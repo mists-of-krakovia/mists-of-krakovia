@@ -1,0 +1,126 @@
+/* Tela de combate — Spec 2, Sub-parte A. Overlay full-screen sobre o jogo. */
+
+.combat-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: radial-gradient(circle at 50% 30%, #14110c 0%, var(--color-bg) 70%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.combat-arena {
+  width: 100%;
+  max-width: 780px;
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  gap: 18px;
+  height: 100%;
+  max-height: 640px;
+}
+
+.combat-side {
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.combat-side.enemies { align-items: flex-start; }
+.combat-side.ally    { align-items: flex-end; }
+
+/* Cartão de combatente */
+.combatant {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 10px 14px;
+  min-width: 180px;
+  transition: border-color 0.2s, box-shadow 0.2s, opacity 0.3s;
+}
+.combatant.is-enemy { border-left: 3px solid var(--color-rust); }
+.combatant.is-ally  { border-left: 3px solid var(--color-gold-dim); }
+.combatant.active {
+  border-color: var(--color-gold);
+  box-shadow: 0 0 12px rgba(201, 168, 76, 0.25);
+}
+.combatant.defeated { opacity: 0.4; filter: grayscale(1); }
+
+.combatant-name { font-size: 14px; margin-bottom: 6px; }
+.combatant-hpbar {
+  height: 8px;
+  background: #0a0a0a;
+  border: 1px solid var(--color-border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.combatant-hpfill {
+  height: 100%;
+  background: linear-gradient(90deg, #7a2a1a, #c53030);
+  transition: width 0.4s ease;
+}
+.is-ally .combatant-hpfill {
+  background: linear-gradient(90deg, #2f855a, #48bb78);
+}
+.combatant-hpnum { font-size: 12px; margin-top: 4px; }
+
+/* Log */
+.combat-log {
+  background: var(--color-bg-panel);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 10px 14px;
+  overflow-y: auto;
+  font-family: var(--font-narrative);
+  font-size: 14px;
+}
+.combat-log-line {
+  color: var(--color-text);
+  margin: 2px 0;
+  opacity: 0.9;
+}
+
+/* Painel de ação */
+.combat-actions {
+  min-height: 92px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.combat-prompt {
+  text-align: center;
+  margin-bottom: 10px;
+  font-size: 15px;
+}
+.combat-btn-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.combat-waiting {
+  font-family: var(--font-narrative);
+  font-style: italic;
+}
+
+.combat-end { text-align: center; }
+.combat-end-title {
+  font-size: 22px;
+  margin-bottom: 10px;
+  letter-spacing: 0.04em;
+}
+.combat-reward {
+  margin-bottom: 14px;
+  font-family: var(--font-narrative);
+}
+.combat-reward-xp {
+  font-size: 16px;
+  color: var(--color-gold);
+  margin-bottom: 4px;
+}
+.combat-reward-level { font-size: 14px; margin-bottom: 4px; }
+.combat-reward-loot  { font-size: 13px; }
+
+/* Reaproveita .btn-action / .btn-primary / .btn-ghost do App.css/Game.css */
+.combat-reaction .btn-action { min-width: 120px; }

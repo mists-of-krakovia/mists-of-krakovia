@@ -35,11 +35,13 @@ const authRoutes = require('./routes/auth');
 const characterRoutes = require('./routes/characters');
 const worldRoutes = require('./routes/world');
 const skillRoutes = require('./routes/skills');
+const combatRoutes = require('./routes/combat');
 
 app.use('/auth', authRoutes);
 app.use('/characters', characterRoutes);
 app.use('/world', worldRoutes);
 app.use('/skills', skillRoutes);
+app.use('/combat', combatRoutes);
 
 // Inicia o servidor
 app.listen(PORT, () => {

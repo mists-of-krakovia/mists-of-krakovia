@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGame } from '../context/GameContext';
-import { characterService, skillService } from '../services/api';
+import { characterService, skillService, combatService } from '../services/api';
+import Combat from './Combat';
 import './Game.css';
 
 const INTRO_TEXT = `Você chegou a Ironfall antes do amanhecer.
@@ -200,9 +201,53 @@ function PageWorld({ node, clock, narrationSeed }) {
 }
 
 // ─── Página: Personagem ──────────────────────────────────────────────
-function PageCharacter({ character, inventory }) {
+const ATTR_ORDER = [
+  { key: 'strength',   abbr: 'FOR', label: 'Força'       },
+  { key: 'agility',    abbr: 'AGI', label: 'Agilidade'   },
+  { key: 'resistance', abbr: 'RES', label: 'Resistência' },
+  { key: 'intellect',  abbr: 'INT', label: 'Intelecto'   },
+  { key: 'perception', abbr: 'PER', label: 'Percepção'   },
+  { key: 'sanity',     abbr: 'SAN', label: 'Sanidade'    },
+];
+
+function PageCharacter({ character, inventory, onAllocateAttributes }) {
   const attrs   = character?.character_attributes || {};
   const derived = character?.character_derived    || {};
+
+  const available = attrs.points_available ?? 0;
+
+  // Distribuição pendente de atributos (deltas por chave), ainda não confirmada.
+  const [pending, setPending] = useState({});
+  const [saving, setSaving]   = useState(false);
+  const [error, setError]     = useState('');
+
+  const spent = Object.values(pending).reduce((a, b) => a + b, 0);
+  const left  = available - spent;
+  const hasPending = spent > 0;
+
+  function adjustAttr(key, delta) {
+    const cur = pending[key] || 0;
+    const next = cur + delta;
+    if (next < 0) return;
+    if (delta > 0 && left === 0) return;
+    const resulting = (attrs[key] || 0) + next;
+    if (delta > 0 && resulting > 21) return;
+    setPending((prev) => ({ ...prev, [key]: next }));
+  }
+
+  async function confirmAttrs() {
+    if (!hasPending) return;
+    setSaving(true);
+    setError('');
+    try {
+      await onAllocateAttributes(pending);
+      setPending({});
+    } catch (err) {
+      setError(err.response?.data?.error || 'Erro ao distribuir atributos.');
+    } finally {
+      setSaving(false);
+    }
+  }
 
   const equipped = {};
   (inventory || []).forEach(inv => {
@@ -210,15 +255,6 @@ function PageCharacter({ character, inventory }) {
       equipped[inv.equipped_slot] = inv;
     }
   });
-
-  const baseAttrs = [
-    { abbr: 'FOR', label: 'Força',       val: attrs.strength   },
-    { abbr: 'AGI', label: 'Agilidade',   val: attrs.agility    },
-    { abbr: 'RES', label: 'Resistência', val: attrs.resistance },
-    { abbr: 'INT', label: 'Intelecto',   val: attrs.intellect  },
-    { abbr: 'PER', label: 'Percepção',   val: attrs.perception },
-    { abbr: 'SAN', label: 'Sanidade',    val: attrs.sanity     },
-  ];
 
   const derivedAttrs = [
     { label: 'Pontos de Vida',   val: `${derived.hp_current ?? '—'}/${derived.hp_max ?? '—'}` },
@@ -280,17 +316,49 @@ function PageCharacter({ character, inventory }) {
       </div>
 
       <div className="char-page-section">
-        <div className="section-label text-dim">Atributos Base</div>
-        <div className="attr-table">
-          {baseAttrs.map(a => (
-            <div key={a.abbr} className="attr-table-row">
-              <span className="attr-table-abbr text-dim">{a.abbr}</span>
-              <span className="attr-table-label">{a.label}</span>
-              <span className="attr-table-grade text-gold">{grade(a.val)}</span>
-              <span className="attr-table-num text-dim">({a.val ?? '—'})</span>
-            </div>
-          ))}
+        <div className="section-label text-dim">
+          Atributos Base
+          {available > 0 && (
+            <span className="points-alert text-gold">
+              {' '}· {left} ponto{left !== 1 ? 's' : ''} a distribuir
+            </span>
+          )}
         </div>
+        <div className="attr-table">
+          {ATTR_ORDER.map(a => {
+            const base = attrs[a.key] ?? 0;
+            const add  = pending[a.key] || 0;
+            const val  = base + add;
+            const canAdd = available > 0 && left > 0 && val < 21;
+            return (
+              <div key={a.abbr} className="attr-table-row">
+                <span className="attr-table-abbr text-dim">{a.abbr}</span>
+                <span className="attr-table-label">{a.label}</span>
+                <span className="attr-table-grade text-gold">{grade(val)}</span>
+                <span className="attr-table-num text-dim">({val})</span>
+                {available > 0 && (
+                  <span className="attr-control" style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 8 }}>
+                    <button className="attr-btn" onClick={() => adjustAttr(a.key, -1)} disabled={add === 0}>−</button>
+                    <button className="attr-btn" onClick={() => adjustAttr(a.key, 1)} disabled={!canAdd}>+</button>
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {error && <p className="login-error">{error}</p>}
+
+        {hasPending && (
+          <div className="create-actions" style={{ marginTop: 12 }}>
+            <button className="btn-ghost" onClick={() => setPending({})} disabled={saving}>
+              Cancelar
+            </button>
+            <button className="btn-primary" onClick={confirmAttrs} disabled={saving}>
+              {saving ? 'Salvando...' : 'Confirmar atributos'}
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="char-page-section">
@@ -519,7 +587,7 @@ function PageUnderConstruction({ label }) {
 
 // ─── Painel direito ──────────────────────────────────────────────────
 // onMove vem do componente principal onde character e setGameState existem
-function PanelRight({ node, connections, npcs, activeQuests, onlinePlayers, onMove }) {
+function PanelRight({ node, connections, npcs, activeQuests, onlinePlayers, onMove, onHunt, hunting, onSave, saving }) {
   const [activeTab, setActiveTab] = useState('world');
 
   const safeNpcs          = npcs          || [];
@@ -593,12 +661,23 @@ function PanelRight({ node, connections, npcs, activeQuests, onlinePlayers, onMo
             </div>
           )}
 
+          {node?.node_type === 'settlement' && (
+            <div className="interaction-section">
+              <div className="section-label text-dim">Assentamento</div>
+              <button className="btn-field" onClick={onSave} disabled={saving}>
+                {saving ? 'Salvando...' : 'Salvar progresso aqui'}
+              </button>
+            </div>
+          )}
+
           {!node?.is_safe_zone && (
             <div className="interaction-section">
               <div className="section-label text-dim">Ações de campo</div>
-              <button className="btn-field">Explorar área</button>
-              <button className="btn-field">Caçar (manual)</button>
-              <button className="btn-field">Coletar recursos</button>
+              <button className="btn-field" disabled title="Em breve">Explorar área</button>
+              <button className="btn-field" onClick={onHunt} disabled={hunting}>
+                {hunting ? 'Procurando...' : 'Caçar'}
+              </button>
+              <button className="btn-field" disabled title="Em breve">Coletar recursos</button>
             </div>
           )}
 
@@ -735,6 +814,9 @@ export default function Game() {
   const [moving, setMoving]           = useState(false);
   const [narrationSeed, setNarrationSeed] = useState(() => Math.floor(Math.random() * 1000));
   const [skillCatalog, setSkillCatalog]   = useState([]);
+  const [combatState, setCombatState]     = useState(null); // estado da sessão de combate ativa
+  const [hunting, setHunting]             = useState(false);
+  const [saving, setSaving]               = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -815,6 +897,49 @@ export default function Game() {
     await loadGameState();
   }
 
+  // Distribui pontos de atributo e recarrega o estado do jogo.
+  async function handleAllocateAttributes(deltas) {
+    await characterService.allocateAttributes(character.id, deltas);
+    await loadGameState();
+  }
+
+  // Caçar: inicia um combate no nó atual e abre a tela de combate.
+  async function handleHunt() {
+    if (hunting || combatState) return;
+    setHunting(true);
+    try {
+      const { data } = await combatService.hunt(character.id);
+      setCombatState(data);
+    } catch (err) {
+      alert(err.response?.data?.error || 'Não há presas para caçar aqui.');
+    } finally {
+      setHunting(false);
+    }
+  }
+
+  // Fim do combate: fecha a tela e recarrega o estado do personagem (HP, XP, etc.).
+  // Em caso de derrota, o backend já reposicionou o personagem no ponto de respawn;
+  // recarregar o estado traz o nó novo.
+  async function handleCombatEnd() {
+    setCombatState(null);
+    await loadGameState();
+    setCurrentPage('world');
+  }
+
+  // Salva o nó atual (assentamento) como ponto de respawn.
+  async function handleSavePoint() {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const { data } = await characterService.savePoint(character.id);
+      alert(`Progresso salvo em ${data.savedNode}.`);
+    } catch (err) {
+      alert(err.response?.data?.error || 'Não foi possível salvar aqui.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   function handleLogout() {
     if (character) {
       characterService.goOffline(character.id).catch(() => {});
@@ -851,7 +976,11 @@ export default function Game() {
 		   narrationSeed={narrationSeed}
 		/>;
       case 'character':
-        return <PageCharacter character={char} inventory={gameState.inventory || []} />;
+        return <PageCharacter
+          character={char}
+          inventory={gameState.inventory || []}
+          onAllocateAttributes={handleAllocateAttributes}
+        />;
       case 'inventory':
         return <PageInventory inventory={gameState.inventory || []} derived={derived} />;
       case 'quests':
@@ -892,7 +1021,18 @@ export default function Game() {
         activeQuests={gameState.activeQuests}
         onlinePlayers={gameState.onlinePlayers || []}
         onMove={handleMove}
+        onHunt={handleHunt}
+        hunting={hunting}
+        onSave={handleSavePoint}
+        saving={saving}
       />
+
+      {combatState && (
+        <Combat
+          initialState={combatState}
+          onEnd={handleCombatEnd}
+        />
+      )}
     </div>
   );
 }

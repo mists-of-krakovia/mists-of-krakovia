@@ -50,7 +50,15 @@ export const characterService = {
     api.post(`/characters/${characterId}/enter`),
 
   allocateSkills: (characterId, alloc) =>
-    api.post(`/characters/${characterId}/skills/allocate`, alloc)
+    api.post(`/characters/${characterId}/skills/allocate`, alloc),
+
+  // Distribui pontos de atributo. deltas: { strength?, agility?, ... } (>= 0).
+  allocateAttributes: (characterId, deltas) =>
+    api.post(`/characters/${characterId}/attributes/allocate`, deltas),
+
+  // Salva o nó atual como ponto de respawn (só em settlement).
+  savePoint: (characterId) =>
+    api.post(`/characters/${characterId}/save-point`)
 };
 
 // Perícias
@@ -66,6 +74,29 @@ export const worldService = {
 
   getNode: (nodeId) =>
     api.get(`/world/nodes/${nodeId}`)
+};
+
+// Combate
+export const combatService = {
+  // Caçar: inicia um combate a partir do nó atual do personagem.
+  hunt: (characterId) =>
+    api.post('/combat/hunt', { characterId }),
+
+  // Estado atual de uma sessão.
+  get: (sessionId) =>
+    api.get(`/combat/${sessionId}`),
+
+  // Ação do jogador no seu turno. action: 'attack' | 'pass'; type: 'quick' | 'strong'.
+  action: (sessionId, action, targetId, type) =>
+    api.post(`/combat/${sessionId}/action`, { action, targetId, type }),
+
+  // Resposta ao prompt de reação. reaction: 'block' | 'dodge' | 'pass'.
+  react: (sessionId, reaction) =>
+    api.post(`/combat/${sessionId}/react`, { reaction }),
+
+  // Tentativa de fuga.
+  flee: (sessionId) =>
+    api.post(`/combat/${sessionId}/flee`)
 };
 
 export default api;

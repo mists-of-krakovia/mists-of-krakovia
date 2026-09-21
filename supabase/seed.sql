@@ -69,3 +69,66 @@ ON CONFLICT ("slug") DO UPDATE SET
 
 -- Garante que a perícia industrial não permaneça no catálogo.
 DELETE FROM "public"."skills_catalog" WHERE "slug" = 'armas_brancas_industriais';
+
+-- ─── Spec 2 — Combate: catálogo de inimigos iniciais ──────────────────
+-- Monstros do primeiro mapa (região de Ironfall). XP inicial 15-25.
+-- Atributos deliberadamente modestos (inimigos "só atacar", IA simples).
+-- Balanceamento fino será feito caso a caso conforme o bestiário crescer.
+-- Referência de derivados: docs/mists_of_krakovia_gameplay_v1.pdf (Volume III).
+INSERT INTO "public"."enemy_catalog"
+  ("slug","name","level","hp_max","attack","defense","speed","accuracy","evasion",
+   "crit_chance","crit_damage","mist_resistance","xp_reward","ai_profile",
+   "attack_types","is_rare","description")
+VALUES
+  -- Rebalanceados (ajuste pós-teste): mais HP/ataque e velocidade alta o
+  -- suficiente para NÃO conceder ação dupla automática ao jogador inicial.
+  ('rato_da_bruma','Rato da Bruma',1,34,12,3,12,14,9,
+   4,150,0,15,'attacker_simple','["quick"]',false,
+   'Roedor mutado pela névoa, rápido e covarde. Ataca em rajadas curtas. O primeiro perigo que qualquer errante encontra fora dos muros de Ironfall.'),
+  ('vagante_corrompido','Vagante Corrompido',2,52,18,7,13,16,7,
+   6,150,2,20,'attacker_simple','["quick","strong"]',false,
+   'Um explorador que ficou tempo demais na névoa. Ainda empunha a arma que trouxe, mas já não há mente por trás dos golpes.'),
+  ('sabujo_de_ferro','Sabujo de Ferro',3,80,26,12,14,17,5,
+   8,160,3,25,'attacker_simple','["quick","strong"]',false,
+   'Autômato de guarda pré-Cataclisma, meio enferrujado, ainda cumprindo uma ordem esquecida. Golpes pesados e implacáveis.')
+ON CONFLICT ("slug") DO UPDATE SET
+  "name"            = EXCLUDED."name",
+  "level"           = EXCLUDED."level",
+  "hp_max"          = EXCLUDED."hp_max",
+  "attack"          = EXCLUDED."attack",
+  "defense"         = EXCLUDED."defense",
+  "speed"           = EXCLUDED."speed",
+  "accuracy"        = EXCLUDED."accuracy",
+  "evasion"         = EXCLUDED."evasion",
+  "crit_chance"     = EXCLUDED."crit_chance",
+  "crit_damage"     = EXCLUDED."crit_damage",
+  "mist_resistance" = EXCLUDED."mist_resistance",
+  "xp_reward"       = EXCLUDED."xp_reward",
+  "ai_profile"      = EXCLUDED."ai_profile",
+  "attack_types"    = EXCLUDED."attack_types",
+  "is_rare"         = EXCLUDED."is_rare",
+  "description"     = EXCLUDED."description";
+
+-- ─── Spec 2 — Combate: spawns nos nós iniciais ────────────────────────
+-- Os nós do mundo são criados no remoto (não versionados como dados), então
+-- associamos os spawns por TIPO de nó, não por UUID fixo. Assim o seed é
+-- idempotente e funciona contra qualquer conjunto de nós existente.
+-- Regra inicial: campos (field) e passagens (passage) da região de Ironfall
+-- podem gerar os monstros iniciais. Idempotência garantida pela limpeza prévia.
+DELETE FROM "public"."node_spawns"
+  WHERE "enemy_slug" IN ('rato_da_bruma','vagante_corrompido','sabujo_de_ferro');
+
+-- Rato da Bruma: comum em campos (peso alto).
+INSERT INTO "public"."node_spawns" ("node_id","enemy_slug","spawn_type","weight","min_count","max_count")
+SELECT "id",'rato_da_bruma','random',120,1,1
+  FROM "public"."world_nodes" WHERE "node_type" IN ('field','passage');
+
+-- Vagante Corrompido: menos comum, campos e névoa.
+INSERT INTO "public"."node_spawns" ("node_id","enemy_slug","spawn_type","weight","min_count","max_count")
+SELECT "id",'vagante_corrompido','random',60,1,1
+  FROM "public"."world_nodes" WHERE "node_type" IN ('field','mist');
+
+-- Sabujo de Ferro: raro nos campos iniciais, mais presente em névoa.
+INSERT INTO "public"."node_spawns" ("node_id","enemy_slug","spawn_type","weight","min_count","max_count")
+SELECT "id",'sabujo_de_ferro','random',30,1,1
+  FROM "public"."world_nodes" WHERE "node_type" IN ('field','mist');

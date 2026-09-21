@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { supabase } = require('../server');
-const { calculateDerived } = require('../services/character');
+const { calculateDerived, applyLevelBonus } = require('../services/character');
 const { authenticateToken } = require('../services/auth');
 const {
   INITIAL_SKILLS_BY_CLASS,
@@ -150,13 +150,10 @@ router.post('/', async (req, res) => {
   }
 
   // ── Perícias ────────────────────────────────────────────────────────
-  // Pontos iniciais: campo = 1 + MG_INT; combate = 3 livres (Volume III).
-  const availablePoints = {
-    field:  initialFieldPoints(finalAttributes.intellect),
-    combat: INITIAL_COMBAT_POINTS,
-  };
-
-  // Níveis de partida: as 3 perícias de combate da classe começam no nível 2.
+  // Criação simplificada: sem etapa de distribuição. O personagem começa apenas
+  // com as 3 perícias de combate da classe (nível 2). Recebe os pontos de CAMPO
+  // referentes ao Intelecto (1 + MG_INT) já disponíveis para gastar depois na
+  // página de Perícias. Pontos de combate iniciais = 0 (só vêm ao subir de nível).
   const classInitial = INITIAL_SKILLS_BY_CLASS[characterClass] || [];
   const levels = {}; // slug -> nível
   const typeOf = {}; // slug -> 'combat' (as iniciais são todas de combate)
@@ -165,45 +162,13 @@ router.post('/', async (req, res) => {
     typeOf[slug] = 'combat';
   }
 
-  // Alocação opcional enviada pelo cliente na criação.
-  const alloc = req.body.skills || { field: {}, combat: {} };
-
-  const { data: catalog } = await supabase
-    .from('skills_catalog')
-    .select('slug, name, skill_type, base_attr, base_attr_alt, requires_training, attr_mg_req');
-
-  const validation = validateAllocation({
-    catalog: catalog || [],
-    attributes: finalAttributes,
-    currentLevels: levels,
-    alloc,
-    available: availablePoints,
-  });
-
-  if (!validation.ok) {
-    // Personagem já foi inserido; reverte para não deixar registro órfão.
-    await supabase.from('characters').delete().eq('id', character.id);
-    return res.status(400).json({ error: validation.error });
-  }
-
-  // Aplica os deltas validados sobre os níveis de partida.
-  for (const a of validation.applied) {
-    levels[a.slug] = (levels[a.slug] ?? 0) + a.delta;
-    typeOf[a.slug] = a.skill_type;
-  }
-
-  const remaining = {
-    field:  availablePoints.field  - validation.spent.field,
-    combat: availablePoints.combat - validation.spent.combat,
-  };
-
   await supabase
     .from('character_attributes')
     .insert({
       character_id: character.id,
       ...finalAttributes,
-      field_skill_points:  remaining.field,
-      combat_skill_points: remaining.combat,
+      field_skill_points:  initialFieldPoints(finalAttributes.intellect),
+      combat_skill_points: 0,
     });
 
   const derived = calculateDerived(finalAttributes);
@@ -531,6 +496,132 @@ router.post('/:characterId/skills/allocate', async (req, res) => {
    console.error('[allocate] EXCEPTION:', err && err.message);
    res.status(500).json({ error: 'Erro ao distribuir perícias.' });
  }
+});
+
+// POST /characters/:characterId/attributes/allocate
+// Distribui pontos de atributo disponíveis (points_available). Body:
+// { strength?, agility?, resistance?, intellect?, perception?, sanity? } (deltas >= 0).
+// Recalcula os derivados = fórmula(novos atributos) + level_bonus (preserva o
+// bônus de progressão). Não cura HP/estamina aqui (só o level-up cura).
+const ATTR_KEYS = ['strength', 'agility', 'resistance', 'intellect', 'perception', 'sanity'];
+router.post('/:characterId/attributes/allocate', async (req, res) => {
+  try {
+    const { characterId } = req.params;
+    const deltas = req.body || {};
+
+    const { data: character } = await supabase
+      .from('characters')
+      .select('id, character_attributes (*), character_derived (*)')
+      .eq('id', characterId)
+      .eq('account_id', req.userId)
+      .single();
+    if (!character) return res.status(404).json({ error: 'Personagem não encontrado.' });
+
+    const attrs = Array.isArray(character.character_attributes)
+      ? character.character_attributes[0] : character.character_attributes;
+    const derived = Array.isArray(character.character_derived)
+      ? character.character_derived[0] : character.character_derived;
+
+    // Valida deltas: inteiros >= 0, soma <= points_available, resultado <= 21.
+    let totalSpent = 0;
+    const newAttrs = { ...attrs };
+    for (const key of ATTR_KEYS) {
+      const d = Math.floor(Number(deltas[key] || 0));
+      if (!Number.isFinite(d) || d < 0) {
+        return res.status(400).json({ error: `Delta inválido para ${key}.` });
+      }
+      if (d > 0) {
+        const next = (attrs[key] || 0) + d;
+        if (next > 21) return res.status(400).json({ error: `${key} excederia o máximo (21).` });
+        newAttrs[key] = next;
+        totalSpent += d;
+      }
+    }
+
+    const available = attrs.points_available || 0;
+    if (totalSpent === 0) return res.status(400).json({ error: 'Nenhum ponto distribuído.' });
+    if (totalSpent > available) {
+      return res.status(400).json({ error: 'Pontos insuficientes.' });
+    }
+
+    // Recalcula derivados = fórmula(novos atributos) + level_bonus (preservado).
+    const base = calculateDerived(newAttrs);
+    const withBonus = applyLevelBonus(base, derived?.level_bonus || {});
+
+    // Preserva HP/estamina atuais (não cura), mas respeita o novo teto.
+    const hpCurrent = Math.min(derived?.hp_current ?? withBonus.hp_max, withBonus.hp_max);
+    const stCurrent = Math.min(derived?.stamina_current ?? withBonus.stamina_max, withBonus.stamina_max);
+
+    // Grava atributos base + pontos restantes.
+    await supabase.from('character_attributes').update({
+      strength: newAttrs.strength, agility: newAttrs.agility, resistance: newAttrs.resistance,
+      intellect: newAttrs.intellect, perception: newAttrs.perception, sanity: newAttrs.sanity,
+      points_available: available - totalSpent,
+    }).eq('character_id', characterId);
+
+    // Grava derivados recalculados.
+    await supabase.from('character_derived').update({
+      hp_max: withBonus.hp_max, hp_current: hpCurrent,
+      stamina_max: withBonus.stamina_max, stamina_current: stCurrent,
+      accuracy: withBonus.accuracy, attack_melee: withBonus.attack_melee,
+      attack_ranged: withBonus.attack_ranged, defense: withBonus.defense,
+      evasion: withBonus.evasion, speed: withBonus.speed,
+      crit_chance: withBonus.crit_chance, crit_damage: withBonus.crit_damage,
+      mental_resistance: withBonus.mental_resistance, mist_resistance: withBonus.mist_resistance,
+      observation: withBonus.observation, carry_capacity: withBonus.carry_capacity,
+    }).eq('character_id', characterId);
+
+    res.json({ ok: true, remaining: available - totalSpent });
+  } catch (err) {
+    console.error('[attr-allocate] EXCEPTION:', err && err.message);
+    res.status(500).json({ error: 'Erro ao distribuir atributos.' });
+  }
+});
+
+// POST /characters/:characterId/save-point
+// Salva o nó atual como ponto de respawn. Só funciona em nós 'settlement'.
+// Guarda histórico dos últimos 10 pontos (mais recente primeiro), sem duplicar
+// o mesmo nó em sequência.
+const MAX_RESPAWN_POINTS = 10;
+router.post('/:characterId/save-point', async (req, res) => {
+  try {
+    const { characterId } = req.params;
+
+    const { data: character } = await supabase
+      .from('characters')
+      .select('id, current_node_id, respawn_points')
+      .eq('id', characterId)
+      .eq('account_id', req.userId)
+      .single();
+    if (!character) return res.status(404).json({ error: 'Personagem não encontrado.' });
+
+    const nodeId = character.current_node_id;
+    if (!nodeId) return res.status(400).json({ error: 'Personagem não está em um nó.' });
+
+    // Só é possível salvar em assentamentos.
+    const { data: node } = await supabase
+      .from('world_nodes')
+      .select('id, name, node_type')
+      .eq('id', nodeId)
+      .single();
+    if (!node || node.node_type !== 'settlement') {
+      return res.status(400).json({ error: 'Só é possível salvar o progresso em um assentamento.' });
+    }
+
+    // Monta o novo histórico: remove ocorrência anterior deste nó, coloca no topo,
+    // limita a MAX_RESPAWN_POINTS.
+    const prev = Array.isArray(character.respawn_points) ? character.respawn_points : [];
+    const withoutDup = prev.filter((p) => p.node_id !== nodeId);
+    const updated = [{ node_id: nodeId, saved_at: new Date().toISOString() }, ...withoutDup]
+      .slice(0, MAX_RESPAWN_POINTS);
+
+    await supabase.from('characters').update({ respawn_points: updated }).eq('id', characterId);
+
+    res.json({ ok: true, savedNode: node.name, respawnPoints: updated });
+  } catch (err) {
+    console.error('[save-point] EXCEPTION:', err && err.message);
+    res.status(500).json({ error: 'Erro ao salvar o ponto de respawn.' });
+  }
 });
 
 // POST /characters/:characterId/move
