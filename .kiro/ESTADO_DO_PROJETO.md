@@ -11,7 +11,8 @@ ajustes de balanceamento, criação simplificada e fluxo de derrota.
 RPG multiplayer de exploração baseado em navegação por nós, com forte ênfase
 narrativa. Pilares: exploração e informação são a recompensa; a Névoa é o
 antagonista; o mundo existe independente do jogador; mistério antes de respostas.
-(Fontes de design: PDFs em `docs/`.)
+(Fontes de design: Markdown vivo em `docs/md/`; PDFs em `docs/` são o planejamento
+inicial.)
 
 Stack:
 - **Backend**: Node + Express 5, `@supabase/supabase-js` (service key), CORS.
@@ -210,4 +211,5 @@ cura), alocar atributos (recalcula derivados preservando bônus), derrota+respaw
   `frontend/src/context/GameContext.jsx`, `frontend/src/services/api.js`.
 - Banco: `supabase/migrations/*.sql`, `supabase/seed.sql`, `supabase/README.md`.
 - Specs: `.kiro/specs/pericias/{requirements,design,tasks}.md`.
-- Docs de design (fonte de verdade): `docs/*.pdf`.
+- Docs de design (fonte de verdade viva): `docs/md/*.md` (índice em
+  `docs/md/README.md`). PDFs em `docs/*.pdf` = planejamento inicial.

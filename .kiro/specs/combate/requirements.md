@@ -1,11 +1,12 @@
 # Spec 2 — Combate por Turnos + Progressão de Nível/XP
 
 Status: rascunho para aprovação
-Fontes de verdade:
-- `docs/mists_of_krakovia_gameplay_v1.pdf` (Volume III — Atributos, Derivados,
-  Perícias de Combate, Sistema de Combate, Névoa em Combate).
-- `docs/mists_of_krakovia_classes_v2.pdf` (Volume V — Classes, habilidades,
-  cooldown por Velocidade).
+Fontes de verdade (atuais em Markdown; PDFs originais são o planejamento inicial):
+- `docs/md/volume-iii-personagem-e-combate.md` (Volume III — Atributos, Derivados,
+  Perícias de Combate, Sistema de Combate, Progressão, Morte).
+- `docs/md/volume-v-classes.md` (Volume V — Classes, habilidades, cooldown).
+- Originais: `docs/mists_of_krakovia_gameplay_v1.pdf`,
+  `docs/mists_of_krakovia_classes_v2.pdf`.
 
 ## Objetivo
 

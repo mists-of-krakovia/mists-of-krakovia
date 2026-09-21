@@ -1,8 +1,11 @@
 # Spec 1 — Sistema de Perícias + Etapa de Criação
 
 Status: rascunho para aprovação
-Fontes de verdade: `docs/mists_of_krakovia_gameplay_v1.pdf` (Volume III — Perícias),
-`docs/mists_of_krakovia_interface_gameplay_v2.pdf` (Volume IV — criação em etapas).
+Fontes de verdade (atuais em Markdown; PDFs são o planejamento inicial):
+`docs/md/volume-iii-personagem-e-combate.md` (Volume III — Perícias),
+`docs/md/volume-iv-interface-e-gameplay.md` (Volume IV — criação).
+Originais: `docs/mists_of_krakovia_gameplay_v1.pdf`,
+`docs/mists_of_krakovia_interface_gameplay_v2.pdf`.
 
 ## Objetivo
 
