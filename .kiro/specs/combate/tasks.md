@@ -43,15 +43,24 @@ de combate) e antes de `db push`.
       (Bloquear/Desviar/Deixar passar) sem revelar o tipo, log, vitória/derrota/fuga.
 - [ ] A14. Botão **Caçar** em `pages/Game.jsx` → inicia sessão → navega para Combat.
 
-## Sub-parte B — Habilidades de classe nível 1–3
-- [ ] B1. Migration + seed `abilities_catalog` (habilidades nv1–3 das 5 classes:
-      class_key, tipo, nível, requisito de perícia, cooldown base, is_ultimate,
-      efeito). RLS SELECT público + grants.
-- [ ] B2. `services/abilities.js`: catálogo, `effectiveCooldown` (MP_AGI×2%, teto
-      40%; ultimate 20%), aplicação de passivas nv1 no snapshot e gatilhos.
-- [ ] B3. Integrar `action='ability'` no motor: valida nível/perícia/cooldown,
-      resolve efeito, seta cooldown no participante. Suporte-a-aliado inerte em 1x1.
-- [ ] B4. Frontend: lista de habilidades com cooldown/requisito no painel de ação.
+## Sub-parte B — Habilidades de classe nível 1–3  [FEITO — testado e2e]
+- [x] B0. Mini-sistema de efeitos por turno em `combat.js`: veneno (dano/turno),
+      atordoamento/paralisia (perde turno), buff (mods temporários), furtivo
+      (+evasão + habilita Emboscada), next_attack (buff do próximo ataque).
+      `effectiveStats` aplica buffs; `tickEffects`/`isDisabled` no início do turno.
+- [x] B1. Migration + seed `abilities_catalog` (23 habilidades: 15 ativas nv1–3 +
+      8 passivas das 5 classes). RLS SELECT público. Aplicada no remoto.
+- [x] B2. `services/abilities.js`: `effectiveCooldown` (MP_AGI×2%, teto 40%/20%),
+      `applyPassives` (mods diretos + Pele de Aço), `availableAbilities`,
+      `resolveAbility` (dispatch por effect.type). Poção em Área cura o self.
+- [x] B3. `action='ability'` no motor: valida classe/nível/perícia/cooldown/estado;
+      Emboscada exige furtividade (rejeita sem consumir turno); cooldown por
+      Velocidade decrementado a cada turno. Passivas aplicadas no snapshot.
+- [x] B4. Frontend: lista de habilidades no painel de ação (nome, cooldown restante,
+      desabilita em CD); `combatService.action` passa `abilitySlug`.
+      NOTA: passivas de gatilho low-HP (Instinto de Fuga, Veterano de Campo) e as de
+      exploração/info/itens (Olhos de Engenheiro, Olhar Clínico, Mãos que Curam)
+      ficam REGISTRADAS mas inertes até os respectivos sistemas existirem.
 
 ## Sub-parte C — Progressão de Nível/XP  [FEITO]
 - [x] C1. `services/progression.js`: `xpToNext(N)=round(100×N^1.7)`, `awardXp`
@@ -75,16 +84,19 @@ de combate) e antes de `db push`.
       (STUB — concessão real depende do spec de itens). Loop pronto; `loot_table`
       vazia por ora → sem drops. Recompensa exposta no payload e na tela de vitória.
 
-## Sub-parte D — Exposição à névoa em combate
+## Sub-parte D — Exposição à névoa em combate  [ADIADA — pós-V1.0]
+Conteúdo de zonas/áreas futuras com mais névoa. Fora do escopo atual (não há nó
+`mist` no mundo inicial). Reavaliar quando essas áreas existirem.
 - [ ] D1. `advanceTurn`: em nó `mist`, acúmulo de Exposição por rodada (com/sem
       proteção via `mist_resistance`); penalidades por faixa aplicadas ao snapshot.
 - [ ] D2. Persistir `mist_exposure` em `character_derived` ao fim do combate.
 - [ ] D3. Frontend: indicador de Exposição no combate quando em névoa.
 
-## Encontro ao mover (atrás de flag)
-- [ ] E1. `routes/characters.js` `/move`: se flag `ENCOUNTERS_ON_MOVE` (default off)
-      e destino tem `encounter_rate`>0 + spawns ativos, rola encontro e sinaliza
-      sessão no retorno. Documentar a flag no `.env.example`.
+## Encontro ao mover (atrás de flag)  [FEITO — testado e2e]
+- [x] E1. `routes/characters.js` `/move`: flag `ENCOUNTERS_ON_MOVE` (default OFF).
+      Se ligada e destino tem `encounter_rate`>0 + spawns ativos, rola encontro e
+      retorna `encounter:true`; o frontend inicia o combate via `/combat/hunt`
+      (mesmo fluxo da caçada). Flag documentada no `.env.example`.
 
 ## Verificação (somente sob pedido explícito do usuário)
 - [ ] V1. Simulação de combate por classe (motor): iniciativa, dano por tipo,

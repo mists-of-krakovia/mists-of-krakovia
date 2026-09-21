@@ -732,7 +732,7 @@ router.post('/:characterId/move', async (req, res) => {
 
   const { data: destNode } = await supabase
     .from('world_nodes')
-    .select('node_type')
+    .select('node_type, encounter_rate')
     .eq('id', toNodeId)
     .single();
 
@@ -743,11 +743,29 @@ router.post('/:characterId/move', async (req, res) => {
       .eq('id', characterId);
   }
 
+  // Encontro ao mover (Sub-parte E) — atrás de flag, desligado por padrão.
+  // Se ligado e o destino tem taxa > 0 e spawns ativos, rola o encontro. Em vez
+  // de criar a sessão aqui (a lógica vive em /combat/hunt), sinalizamos no retorno
+  // e o cliente inicia o combate pelo mesmo fluxo da caçada.
+  let encounter = false;
+  const encountersOn = String(process.env.ENCOUNTERS_ON_MOVE || '').toLowerCase() === 'true';
+  if (encountersOn && destNode && Number(destNode.encounter_rate) > 0) {
+    const { count } = await supabase
+      .from('node_spawns')
+      .select('id', { count: 'exact', head: true })
+      .eq('node_id', toNodeId)
+      .eq('is_active', true);
+    if (count && count > 0 && Math.random() < Number(destNode.encounter_rate)) {
+      encounter = true;
+    }
+  }
+
   res.json({
     success:     true,
     newNodeId:   toNodeId,
     staminaLeft: newStamina,
-    travelCost
+    travelCost,
+    encounter
   });
 });
 

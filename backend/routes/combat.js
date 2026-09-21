@@ -20,6 +20,7 @@ const { authenticateToken } = require('../services/auth');
 const combat = require('../services/combat');
 const progression = require('../services/progression');
 const loot = require('../services/loot');
+const abilities = require('../services/abilities');
 
 router.use(authenticateToken);
 
@@ -237,13 +238,109 @@ function statePayload(session, participants) {
     })),
     events: session._events || [],
     reward: session._reward || null,
+    abilities: session._abilities || [],
   };
+}
+
+// Carrega e anexa as habilidades ativas disponíveis do jogador (para o painel de
+// ação do frontend): filtra por nível/perícia e junta o cooldown restante atual.
+async function attachAbilities(session, participants) {
+  const player = participants.find((p) => p.side === 'ally' && p.character_id);
+  if (!player) { session._abilities = []; return; }
+
+  const { data: character } = await supabase
+    .from('characters').select('class, level').eq('id', player.character_id).single();
+  if (!character) { session._abilities = []; return; }
+
+  const { data: catalog } = await supabase
+    .from('abilities_catalog').select('*').eq('class_key', character.class).order('sort_order');
+
+  const skillLevels = player.stats._skills || {};
+  const active = abilities.availableAbilities(catalog || [], character.level, skillLevels);
+  const cds = player.cooldowns || {};
+
+  session._abilities = active.map((ab) => ({
+    slug: ab.slug, name: ab.name, kind: ab.kind, target: ab.target,
+    cooldown_base: ab.cooldown_base, cooldown_remaining: cds[ab.slug] || 0,
+    description: ab.description,
+  }));
 }
 
 // Adiciona linha(s) de narração ao acumulador da requisição.
 function pushEvent(session, ...lines) {
   if (!session._events) session._events = [];
   for (const l of lines) if (l) session._events.push(l);
+}
+
+// Usa uma habilidade ativa do jogador. Valida nível/perícia/cooldown/alvo,
+// resolve o efeito, aplica cooldown efetivo (por Velocidade) e narra.
+// Retorna string de erro se inválida; null se ok.
+async function useAbility(session, participants, actor, abilitySlug, targetId) {
+  if (!abilitySlug) return 'Habilidade não informada.';
+
+  const { data: character } = await supabase
+    .from('characters').select('class, level').eq('id', actor.character_id).single();
+  if (!character) return 'Personagem não encontrado.';
+
+  const { data: ability } = await supabase
+    .from('abilities_catalog').select('*').eq('slug', abilitySlug).single();
+  if (!ability || ability.class_key !== character.class) return 'Habilidade indisponível.';
+  if (ability.is_passive) return 'Habilidade passiva não pode ser usada.';
+  if (character.level < ability.unlock_level) return 'Nível insuficiente para esta habilidade.';
+
+  if (ability.req_skill) {
+    const lvl = (actor.stats._skills || {})[ability.req_skill] || 0;
+    if (lvl < (ability.req_skill_level || 0)) return 'Requisito de perícia não atendido.';
+  }
+
+  const cds = actor.cooldowns || {};
+  if ((cds[abilitySlug] || 0) > 0) return `Habilidade em recarga (${cds[abilitySlug]} turno(s)).`;
+
+  // Alvo: para 'enemy' pega o alvo informado ou o primeiro inimigo vivo.
+  let target = null;
+  if (ability.target === 'enemy') {
+    target = byId(participants, targetId) || participants.find((p) => p.side === 'enemy' && !p.is_defeated);
+    if (!target || target.is_defeated) return 'Alvo inválido.';
+  }
+
+  const out = abilities.resolveAbility({ ability, actor, target });
+  if (out.invalid) {
+    // pré-requisito de estado não atendido (ex.: Emboscada sem furtividade):
+    // devolve erro para o cliente; NÃO consome o turno.
+    return out.lines[out.lines.length - 1] || 'Não é possível usar esta habilidade agora.';
+  }
+  for (const l of out.lines) pushEvent(session, l);
+  if (target && target.is_defeated) pushEvent(session, combat.narrateDefeat(target));
+
+  // Cooldown efetivo por Velocidade.
+  const mpAgi = (actor.stats._attrs && actor.stats._attrs.agility) || actor.stats.mp_agi || 5;
+  const cd = abilities.effectiveCooldown(ability.cooldown_base, mpAgi, ability.is_ultimate);
+  if (cd > 0) { cds[abilitySlug] = cd; actor.cooldowns = cds; }
+
+  await logTurn(session.id, session.round_number, session.active_index, actor.id,
+    target ? target.id : null, `ability_${abilitySlug}`, { lines: out.lines });
+  return null;
+}
+
+// Início do turno de um participante: tica efeitos (veneno + expiração),
+// decrementa cooldowns. Retorna { disabled } se o ator está atordoado/paralisado
+// (perde o turno) ou morreu por veneno.
+function startTurn(session, actor) {
+  const tick = combat.tickEffects(actor);
+  for (const l of tick.lines) pushEvent(session, l);
+  if (actor.is_defeated) { pushEvent(session, combat.narrateDefeat(actor)); return { disabled: true }; }
+  // decrementa cooldowns
+  const cds = actor.cooldowns || {};
+  for (const k of Object.keys(cds)) {
+    cds[k] = Math.max(0, (cds[k] || 0) - 1);
+    if (cds[k] === 0) delete cds[k];
+  }
+  actor.cooldowns = cds;
+  if (combat.isDisabled(actor)) {
+    pushEvent(session, `${actor.side === 'ally' ? 'Você está' : actor.display_name + ' está'} incapacitado e perde o turno.`);
+    return { disabled: true };
+  }
+  return { disabled: false };
 }
 
 // ─── Motor de progressão de turnos (orquestração) ────────────────────────────
@@ -270,10 +367,21 @@ async function runEnemyTurns(session, participants) {
     if (!actor || actor.is_defeated) { session.active_index += 1; continue; }
 
     if (actor.side === 'ally') {
+      // vez do jogador: tica efeitos/cooldowns; se incapacitado, pula o turno.
+      const st = startTurn(session, actor);
+      const stillEnd = combat.checkEnd(participants);
+      if (stillEnd !== 'active') { session.status = stillEnd; return { ended: true }; }
+      if (st.disabled) { session.active_index += 1; continue; }
       // vez do jogador: reseta reação e devolve o controle
       actor.reaction_used = false;
       return { ended: false, awaitingPlayer: true };
     }
+
+    // início do turno do inimigo (veneno/cooldown/atordoamento)
+    const st = startTurn(session, actor);
+    const endAfterTick = combat.checkEnd(participants);
+    if (endAfterTick !== 'active') { session.status = endAfterTick; return { ended: true }; }
+    if (st.disabled) { session.active_index += 1; continue; }
 
     // ator inimigo: escolhe alvo/tipo
     const allies = participants.filter((p) => p.side === 'ally');
@@ -432,7 +540,7 @@ router.post('/hunt', async (req, res) => {
 
     const { data: character, error } = await supabase
       .from('characters')
-      .select('*, character_derived (*), character_skills (*)')
+      .select('*, character_attributes (*), character_derived (*), character_skills (*)')
       .eq('id', characterId)
       .eq('account_id', req.userId)
       .single();
@@ -465,10 +573,18 @@ router.post('/hunt', async (req, res) => {
     // Monta participantes.
     const derived = Array.isArray(character.character_derived)
       ? character.character_derived[0] : character.character_derived;
+    const attributes = Array.isArray(character.character_attributes)
+      ? character.character_attributes[0] : character.character_attributes;
     const skills = character.character_skills || [];
 
     const count = combat.rng(picked.min_count, picked.max_count);
-    const playerP = combat.buildPlayerParticipant(character, derived, skills, 0);
+    const playerP = combat.buildPlayerParticipant(character, derived, skills, 0, attributes);
+
+    // Passivas de combate: aplicadas no snapshot do jogador.
+    const { data: classAbilities } = await supabase
+      .from('abilities_catalog').select('*').eq('class_key', character.class);
+    abilities.applyPassives(playerP, classAbilities || [], character.level);
+
     const enemyPs = [];
     for (let i = 0; i < count; i++) {
       enemyPs.push(combat.buildEnemyParticipant(enemy, i + 1, count > 1 ? String(i + 1) : ''));
@@ -493,6 +609,7 @@ router.post('/hunt', async (req, res) => {
     await saveAllParticipants(inserted);
     await saveSession(session);
 
+    await attachAbilities(session, inserted);
     res.json(statePayload(session, inserted));
   } catch (err) {
     console.error('[combat/hunt] EXCEPTION:', err && err.message);
@@ -504,13 +621,14 @@ router.post('/hunt', async (req, res) => {
 router.get('/:sessionId', async (req, res) => {
   const { session, participants, error } = await loadSession(req.params.sessionId, req.userId);
   if (error) return res.status(404).json({ error });
+  await attachAbilities(session, participants);
   res.json(statePayload(session, participants));
 });
 
 // ─── POST /combat/:sessionId/action — ação do jogador ────────────────────────
 router.post('/:sessionId/action', async (req, res) => {
   try {
-    const { action, targetId, type } = req.body; // action: 'attack'|'pass'; type: 'quick'|'strong'
+    const { action, targetId, type, abilitySlug } = req.body; // action: 'attack'|'pass'|'ability'
     const { session, participants, error } = await loadSession(req.params.sessionId, req.userId);
     if (error) return res.status(404).json({ error });
     if (session.status !== 'active') return res.status(409).json({ error: 'Combate encerrado.' });
@@ -538,6 +656,9 @@ router.post('/:sessionId/action', async (req, res) => {
       if (target.is_defeated) pushEvent(session, combat.narrateDefeat(target));
       await logTurn(session.id, session.round_number, session.active_index, actor.id, target.id,
         `attack_${atkType}`, atk);
+    } else if (action === 'ability') {
+      const err2 = await useAbility(session, participants, actor, abilitySlug, targetId);
+      if (err2) return res.status(400).json({ error: err2 });
     } else if (action === 'pass') {
       pushEvent(session, 'Você passou o turno e ficou em guarda.');
       await logTurn(session.id, session.round_number, session.active_index, actor.id, null, 'pass', {});
@@ -564,6 +685,7 @@ router.post('/:sessionId/action', async (req, res) => {
     await finalizeIfEnded(session, participants);
     await saveAllParticipants(participants);
     await saveSession(session);
+    await attachAbilities(session, participants);
     res.json(statePayload(session, participants));
   } catch (err) {
     console.error('[combat/action] EXCEPTION:', err && err.message);
@@ -604,6 +726,7 @@ router.post('/:sessionId/react', async (req, res) => {
     await finalizeIfEnded(session, participants);
     await saveAllParticipants(participants);
     await saveSession(session);
+    await attachAbilities(session, participants);
     res.json(statePayload(session, participants));
   } catch (err) {
     console.error('[combat/react] EXCEPTION:', err && err.message);
@@ -633,7 +756,9 @@ router.post('/:sessionId/flee', async (req, res) => {
       pushEvent(session, 'Você conseguiu fugir do combate.');
       await logTurn(session.id, session.round_number, session.active_index, player.id, null, 'flee',
         { success: true, fleeChance });
+      await syncPlayerHp(participants);
       await saveSession(session);
+      await attachAbilities(session, participants);
       return res.json(statePayload(session, participants));
     }
 
@@ -656,6 +781,7 @@ router.post('/:sessionId/flee', async (req, res) => {
     await finalizeIfEnded(session, participants);
     await saveAllParticipants(participants);
     await saveSession(session);
+    await attachAbilities(session, participants);
     res.json(statePayload(session, participants));
   } catch (err) {
     console.error('[combat/flee] EXCEPTION:', err && err.message);

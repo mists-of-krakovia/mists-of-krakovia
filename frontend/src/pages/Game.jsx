@@ -878,11 +878,18 @@ export default function Game() {
     if (moving) return;
     setMoving(true);
     try {
-      await characterService.move(character.id, toNodeId);
+      const { data: moveResult } = await characterService.move(character.id, toNodeId);
       const { data } = await characterService.enter(character.id);
       setGameState(data);
       setCurrentPage('world');
 	  setNarrationSeed(Math.floor(Math.random() * 1000));
+      // Encontro ao mover (se a flag ENCOUNTERS_ON_MOVE estiver ligada no backend).
+      if (moveResult?.encounter) {
+        try {
+          const { data: combat } = await combatService.hunt(character.id);
+          setCombatState(combat);
+        } catch { /* sem presa/spawn: segue sem combate */ }
+      }
     } catch (err) {
       const message = err.response?.data?.error || 'Erro ao se mover.';
       alert(message);

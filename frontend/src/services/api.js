@@ -86,9 +86,10 @@ export const combatService = {
   get: (sessionId) =>
     api.get(`/combat/${sessionId}`),
 
-  // Ação do jogador no seu turno. action: 'attack' | 'pass'; type: 'quick' | 'strong'.
-  action: (sessionId, action, targetId, type) =>
-    api.post(`/combat/${sessionId}/action`, { action, targetId, type }),
+  // Ação do jogador. action: 'attack' | 'pass' | 'ability'.
+  // type: 'quick'|'strong' (para attack); abilitySlug (para ability).
+  action: (sessionId, action, targetId, type, abilitySlug) =>
+    api.post(`/combat/${sessionId}/action`, { action, targetId, type, abilitySlug }),
 
   // Resposta ao prompt de reação. reaction: 'block' | 'dodge' | 'pass'.
   react: (sessionId, reaction) =>

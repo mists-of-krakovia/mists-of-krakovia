@@ -37,6 +37,82 @@ function counterAttackEnabled(classKey) {
   return COUNTER_ATTACK_BY_CLASS[classKey] === true;
 }
 
+// ─── Efeitos de status por turno (Sub-parte B) ────────────────────────────────
+// Vivem em participant.effects (jsonb). Cada efeito:
+//   { kind, name, turns, ... }
+//   kind 'poison'  -> { damage } dano por turno no início do turno do afetado.
+//   kind 'stun'    -> alvo perde o turno enquanto durar.
+//   kind 'stealth' -> concede bônus de evasão (stats.evasion) e habilita Emboscada.
+//   kind 'buff'    -> { mods: { accuracy?, evasion?, defense?, attack_melee?... } }
+//                     modificadores temporários somados aos stats do snapshot.
+//   kind 'next_attack' -> { damageMult, ignoreDefense } aplicado ao PRÓXIMO ataque.
+// A duração (turns) decrementa no início do turno do afetado; efeito expira em 0.
+
+const STEALTH_EVASION_BONUS = 30; // Passo Silencioso: grande bônus de evasão.
+
+// Retorna os stats efetivos (snapshot + buffs/efeitos temporários).
+function effectiveStats(p) {
+  const s = { ...p.stats };
+  for (const e of p.effects || []) {
+    if (e.kind === 'buff' && e.mods) {
+      for (const k of Object.keys(e.mods)) s[k] = (s[k] || 0) + e.mods[k];
+    }
+    if (e.kind === 'stealth') {
+      s.evasion = (s.evasion || 0) + (e.evasionBonus || STEALTH_EVASION_BONUS);
+    }
+  }
+  return s;
+}
+
+function hasEffect(p, kind) {
+  return (p.effects || []).some((e) => e.kind === kind);
+}
+
+// Está impedido de agir? (atordoamento/paralisia)
+function isDisabled(p) {
+  return (p.effects || []).some((e) => e.kind === 'stun');
+}
+
+function addEffect(p, effect) {
+  if (!p.effects) p.effects = [];
+  p.effects.push(effect);
+}
+
+function removeEffect(p, kind) {
+  p.effects = (p.effects || []).filter((e) => e.kind !== kind);
+}
+
+// Tica os efeitos no INÍCIO do turno do participante: aplica dano de veneno,
+// decrementa durações, expira os que zerarem. Retorna { damage, expired, lines }.
+function tickEffects(p) {
+  const lines = [];
+  let poisonDamage = 0;
+  const kept = [];
+  for (const e of p.effects || []) {
+    if (e.kind === 'poison') {
+      poisonDamage += e.damage || 0;
+      lines.push(`${p.side === 'ally' ? 'Você' : p.display_name} sofre ${e.damage} de dano de veneno.`);
+    }
+    const turns = (e.turns ?? 1) - 1;
+    if (turns > 0) kept.push({ ...e, turns });
+    // efeitos com turns<=0 expiram (não são mantidos)
+  }
+  p.effects = kept;
+  if (poisonDamage > 0) {
+    p.hp_current = Math.max(0, p.hp_current - poisonDamage);
+    if (p.hp_current === 0) p.is_defeated = true;
+  }
+  return { damage: poisonDamage, lines };
+}
+
+// Consome o efeito 'next_attack' (buff de dano do próximo ataque), se houver.
+function consumeNextAttack(p) {
+  const e = (p.effects || []).find((x) => x.kind === 'next_attack');
+  if (!e) return null;
+  p.effects = p.effects.filter((x) => x !== e);
+  return e;
+}
+
 // ─── RNG ───────────────────────────────────────────────────────────────────
 function rng(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -51,7 +127,7 @@ function clamp(v, lo, hi) {
 // ─── Snapshots ───────────────────────────────────────────────────────────────
 // Monta o participante-jogador a partir de character + derived + skills.
 // bonuses de perícia de arma/armadura entram aqui (fiel ao Volume III).
-function buildPlayerParticipant(character, derived, skills, slot = 0) {
+function buildPlayerParticipant(character, derived, skills, slot = 0, attributes = null) {
   const skillLevel = (slug) => {
     const s = (skills || []).find((k) => k.skill_name === slug);
     return s ? s.level : 0;
@@ -75,9 +151,17 @@ function buildPlayerParticipant(character, derived, skills, slot = 0) {
     crit_chance:   Number(derived.crit_chance),
     crit_damage:   Number(derived.crit_damage),
     mist_resistance: derived.mist_resistance,
-    mp_agi:        Math.round(derived.speed / 2), // MP_AGI ~ speed/2 (speed=AGI*2)
+    mp_agi:        attributes ? attributes.agility : Math.round(derived.speed / 2),
     block_skill:   blockSkill,
     speed_penalty_next: 0, // acumulador de penalidade (Ataque Forte)
+    // Atributos base para escalar habilidades (MP_INT, MP_FOR, ...).
+    _attrs: attributes ? {
+      strength: attributes.strength, agility: attributes.agility,
+      resistance: attributes.resistance, intellect: attributes.intellect,
+      perception: attributes.perception, sanity: attributes.sanity,
+    } : null,
+    // Mapa COMPLETO de perícias (slug -> nível) para requisitos de habilidade.
+    _skills: Object.fromEntries((skills || []).map((k) => [k.skill_name, k.level])),
   };
 
   return {
@@ -204,11 +288,16 @@ function resolveReaction(incomingType, reaction, defenderStats) {
 // reaction (opcional): resultado de resolveReaction já calculado (defensor jogador).
 // Retorna { hit, crit, damage, mitigated, blocked, note }.
 function resolveAttack({ attacker, defender, type, reaction, isRanged = false }) {
-  const aStats = attacker.stats;
-  const dStats = defender.stats;
+  const aStats = effectiveStats(attacker);
+  const dStats = effectiveStats(defender);
   const baseAttack = isRanged ? aStats.attack_ranged : aStats.attack_melee;
 
   const result = { hit: false, crit: false, damage: 0, mitigated: 0, blocked: false, type, note: '' };
+
+  // Buff do próximo ataque (ex.: Ponto Fraco): +dano e/ou ignora parte da Defesa.
+  const nextAtk = consumeNextAttack(attacker);
+  const nextMult = nextAtk ? (nextAtk.damageMult || 1) : 1;
+  const ignoreDef = nextAtk ? (nextAtk.ignoreDefense || 0) : 0;
 
   // 1. Acerto
   const hc = hitChance(aStats, dStats, type);
@@ -229,8 +318,8 @@ function resolveAttack({ attacker, defender, type, reaction, isRanged = false })
     critMult = aStats.crit_damage || 1.5;
   }
 
-  // 4. Dano bruto
-  let raw = baseAttack * typeMult * critMult + rng(1, 10);
+  // 4. Dano bruto (inclui buff de próximo ataque)
+  let raw = baseAttack * typeMult * critMult * nextMult + rng(1, 10);
 
   // 5. Reação do defensor (se houver)
   if (reaction) {
@@ -248,8 +337,9 @@ function resolveAttack({ attacker, defender, type, reaction, isRanged = false })
     }
   }
 
-  // 6. Defesa do alvo + mínimo 1
-  const dmg = Math.max(1, Math.round(raw - dStats.defense));
+  // 6. Defesa do alvo (reduzida por ignoreDefense) + mínimo 1
+  const effectiveDefense = Math.round((dStats.defense || 0) * (1 - ignoreDef));
+  const dmg = Math.max(1, Math.round(raw - effectiveDefense));
   result.damage = dmg;
   return result;
 }
@@ -261,9 +351,10 @@ function resolveCounter({ defender, attacker }) {
   const classKey = defender.stats.class;
   if (!classKey || !counterAttackEnabled(classKey)) return null;
 
-  const baseAttack = defender.stats.attack_melee;
-  const raw = baseAttack * COUNTER_MULT + rng(1, 10);
-  const dmg = Math.max(1, Math.round(raw - attacker.stats.defense));
+  const dStats = effectiveStats(defender);
+  const aStats = effectiveStats(attacker);
+  const raw = dStats.attack_melee * COUNTER_MULT + rng(1, 10);
+  const dmg = Math.max(1, Math.round(raw - aStats.defense));
   return { damage: dmg, note: 'Contra-ataque!' };
 }
 
@@ -359,12 +450,14 @@ module.exports = {
   // constantes / config
   COUNTER_ATTACK_BY_CLASS,
   counterAttackEnabled,
+  STEALTH_EVASION_BONUS,
   // snapshots
   buildPlayerParticipant,
   buildEnemyParticipant,
   // motor
   rollInitiative,
   effectiveSpeed,
+  effectiveStats,
   hitChance,
   resolveReaction,
   resolveAttack,
@@ -373,6 +466,13 @@ module.exports = {
   checkEnd,
   sumXpReward,
   pickSpawn,
+  // efeitos de status
+  addEffect,
+  removeEffect,
+  hasEffect,
+  isDisabled,
+  tickEffects,
+  consumeNextAttack,
   // narração
   narrateAttack,
   narrateReaction,

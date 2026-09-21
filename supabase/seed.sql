@@ -132,3 +132,131 @@ SELECT "id",'vagante_corrompido','random',60,1,1
 INSERT INTO "public"."node_spawns" ("node_id","enemy_slug","spawn_type","weight","min_count","max_count")
 SELECT "id",'sabujo_de_ferro','random',30,1,1
   FROM "public"."world_nodes" WHERE "node_type" IN ('field','mist');
+
+-- ─── Spec 2 — Sub-parte B: catálogo de habilidades de classe (nv1-3) ──────
+-- Volume V. Habilidades ativas (com cooldown) e passivas de nível 1-3.
+-- O campo effect.type é despachado pelo motor (services/abilities.js).
+-- Habilidades que consomem item funcionam sem checar inventário por ora.
+INSERT INTO "public"."abilities_catalog"
+  ("slug","class_key","name","kind","unlock_level","req_skill","req_skill_level",
+   "cooldown_base","is_ultimate","is_passive","target","effect","description","sort_order")
+VALUES
+  -- ── Vagante das Névoas ──────────────────────────────────────────────
+  ('navalha_veloz','vagante_nevoas','Navalha Veloz','offensive',1,'armas_brancas_leves',1,
+   3,false,false,'enemy',
+   '{"type":"multi_attack","hits":2,"secondRatio":0.7,"secondCritBonus":10}',
+   'Dois golpes rápidos com arma leve. O segundo aproveita a abertura do primeiro.',10),
+  ('passo_silencioso','vagante_nevoas','Passo Silencioso','mobility',1,NULL,0,
+   3,false,false,'self',
+   '{"type":"stealth","evasionBonus":30,"turns":2}',
+   'Movimento furtivo: entra em estado de esquiva elevada e prepara uma emboscada.',11),
+  ('emboscada','vagante_nevoas','Emboscada','offensive',3,'armas_brancas_leves',3,
+   4,false,false,'enemy',
+   '{"type":"heavy_attack","damageMult":2.0,"ignoreDefense":0.3,"requiresStealth":true}',
+   'Ataque devastador a partir de posição furtiva. Requer estar em furtividade.',12),
+
+  -- ── Arauto do Conclave ──────────────────────────────────────────────
+  ('granada_quimica','arauto_conclave','Granada Química','offensive',1,'dispositivos_combate',1,
+   3,false,false,'enemy',
+   '{"type":"scaled_attack","attr":"intellect","mult":2.5,"applies":[{"kind":"buff","name":"Exposição","mods":{},"turns":3}]}',
+   'Granada de dano em área com composto de névoa. (Custo de item adiado.)',20),
+  ('armadilha_pressao','arauto_conclave','Armadilha de Pressão','control',1,'engenharia',0,
+   2,false,false,'enemy',
+   '{"type":"scaled_attack","attr":"intellect","mult":3,"applies":[{"kind":"buff","name":"Lentidão","mods":{"speed":-5},"turns":2}]}',
+   'Implanta uma armadilha que detona no inimigo, reduzindo sua velocidade.',21),
+  ('tiro_de_precisao','arauto_conclave','Tiro de Precisão','offensive',3,'armas_fogo_leves',2,
+   4,false,false,'enemy',
+   '{"type":"attack_effect","damageMult":1.3,"ranged":true,"status":{"kind":"stun","name":"Derrubado","turns":1}}',
+   'Disparo calculado que derruba o alvo por um turno.',22),
+
+  -- ── Exilado de Ferro ────────────────────────────────────────────────
+  ('golpe_pesado','exilado_ferro','Golpe Pesado','offensive',1,NULL,0,
+   3,false,false,'enemy',
+   '{"type":"heavy_attack","damageMult":2.2,"ignoreDefense":0.25,"attrBonus":"strength","speedPenalty":3}',
+   'Golpe único devastador que ignora parte da defesa. Reduz sua velocidade.',30),
+  ('provocacao','exilado_ferro','Provocação','control',1,NULL,0,
+   4,false,false,'self',
+   '{"type":"self_buff","mods":{"defense":10},"turns":2,"taunt":true}',
+   'Grito de guerra: força inimigos a focar em você e aumenta sua defesa.',31),
+  ('golpe_de_escudo','exilado_ferro','Golpe de Escudo','offensive',3,'escudos_bloqueio',3,
+   4,false,false,'enemy',
+   '{"type":"attack_effect","damageMult":1.0,"attrBonus":"strength","status":{"kind":"stun","name":"Atordoado","turns":1}}',
+   'Golpe com o escudo que causa dano e atordoa o alvo por um turno.',32),
+
+  -- ── Confessor do Véu ────────────────────────────────────────────────
+  ('ataque_envenenado','confessor_veu','Ataque Envenenado','offensive',1,NULL,0,
+   3,false,false,'enemy',
+   '{"type":"poison_attack","attr":"intellect","poisonMult":1.5,"turns":3}',
+   'Aplica veneno na arma: dano imediato + dano contínuo por 3 turnos. (Item adiado.)',40),
+  ('pocao_em_area','confessor_veu','Poção em Área','support',1,'medicina_combate',1,
+   3,false,false,'self',
+   '{"type":"heal","attr":"intellect","mult":4}',
+   'Cura em área. Sozinho, cura a si mesmo. (Custo de item adiado.)',41),
+  ('gas_paralisante','confessor_veu','Gás Paralisante','control',3,NULL,0,
+   4,false,false,'enemy',
+   '{"type":"attack_effect","damageMult":1.0,"attr":"intellect","attrMult":2,"status":{"kind":"stun","name":"Paralisado","turns":1}}',
+   'Composto que causa dano e paralisa o alvo por um turno.',42),
+
+  -- ── Cronista das Ruínas ─────────────────────────────────────────────
+  ('tiro_rapido','cronista_ruinas','Tiro Rápido','offensive',1,'armas_fogo_leves',1,
+   2,false,false,'enemy',
+   '{"type":"simple_attack","damageMult":0.9,"accuracyBonus":10,"ranged":true}',
+   'Disparo rápido, levemente mais fraco mas com maior chance de acerto.',50),
+  ('ponto_fraco','cronista_ruinas','Ponto Fraco','offensive',1,NULL,0,
+   3,false,false,'self',
+   '{"type":"next_attack_buff","damageMult":1.3,"ignoreDefense":0.2}',
+   'Marca a vulnerabilidade do alvo: o próximo ataque causa mais dano e ignora parte da defesa.',51),
+  ('improviso_tatico','cronista_ruinas','Improviso Tático','offensive',3,NULL,0,
+   4,false,false,'enemy',
+   '{"type":"attack_effect","damageMult":1.0,"attr":"perception","attrMult":2,"status":{"kind":"stun","name":"Atordoado","turns":1},"statusChance":0.5,"ranged":true}',
+   'Usa o ambiente como arma: dano e chance de atordoar.',52),
+
+  -- ── Passivas de combate nv1 (efeito mecânico) ───────────────────────
+  ('lamina_afiada','vagante_nevoas','Lâmina Afiada','passive',1,NULL,0,
+   0,false,true,'none',
+   '{"type":"passive","mods":{"crit_chance":8}}',
+   'Armas leves são mais letais nas suas mãos: +8% de chance de crítico.',60),
+  ('precisao_natural','cronista_ruinas','Precisão Natural','passive',1,NULL,0,
+   0,false,true,'none',
+   '{"type":"passive","mods":{"crit_chance":5,"accuracy":3}}',
+   'Pensa antes de agir: +5% crítico e +acerto.',61),
+  ('pele_de_aco','exilado_ferro','Pele de Aço','passive',1,NULL,0,
+   0,false,true,'none',
+   '{"type":"passive_defense_res","factor":0.5}',
+   'Anos de armadura endureceram o corpo: defesa passiva adicional (MP_RES x 0.5).',62),
+  ('maos_que_curam','confessor_veu','Mãos que Curam','passive',1,NULL,0,
+   0,false,true,'none',
+   '{"type":"passive_heal_bonus","pct":0.4}',
+   'Poções e kits rendem +40% de cura nas suas mãos.',63),
+  ('olhos_de_engenheiro','arauto_conclave','Olhos de Engenheiro','passive',1,NULL,0,
+   0,false,true,'none',
+   '{"type":"passive_info"}',
+   'Vê mecanismos e dispositivos onde outros veem ruínas. (Preparado; efeito de exploração futuro.)',64),
+
+  -- ── Passivas de nv1 com gatilho (implementadas onde possível) ───────
+  ('instinto_de_fuga','vagante_nevoas','Instinto de Fuga','passive',1,NULL,0,
+   0,false,true,'none',
+   '{"type":"passive_trigger_lowhp","hpThreshold":0.3,"mods":{"evasion":10,"speed":2}}',
+   'Com PV baixo (<30%), velocidade e evasão aumentam automaticamente.',65),
+  ('veterano_de_campo','exilado_ferro','Veterano de Campo','passive',1,NULL,0,
+   0,false,true,'none',
+   '{"type":"passive_trigger_lowhp_heal","hpThreshold":0.15,"healPct":0.10}',
+   'Com PV crítico (<15%), recupera 10% do PV máximo uma vez por combate.',66),
+  ('olhar_clinico','cronista_ruinas','Olhar Clínico','passive',1,NULL,0,
+   0,false,true,'none',
+   '{"type":"passive_reveal"}',
+   'No início do combate, revela os atributos dos inimigos. (Preparado.)',67)
+ON CONFLICT ("slug") DO UPDATE SET
+  "class_key"       = EXCLUDED."class_key",
+  "name"            = EXCLUDED."name",
+  "kind"            = EXCLUDED."kind",
+  "unlock_level"    = EXCLUDED."unlock_level",
+  "req_skill"       = EXCLUDED."req_skill",
+  "req_skill_level" = EXCLUDED."req_skill_level",
+  "cooldown_base"   = EXCLUDED."cooldown_base",
+  "is_ultimate"     = EXCLUDED."is_ultimate",
+  "is_passive"      = EXCLUDED."is_passive",
+  "target"          = EXCLUDED."target",
+  "effect"          = EXCLUDED."effect",
+  "description"     = EXCLUDED."description",
+  "sort_order"      = EXCLUDED."sort_order";

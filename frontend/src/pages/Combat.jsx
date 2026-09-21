@@ -40,6 +40,7 @@ export default function Combat({ initialState, onEnd }) {
   const activeId = session.turn_order?.[session.active_index];
   const isPlayerTurn = !ended && !awaitingReaction && ally && activeId === ally.id && !ally.is_defeated;
   const reward = session.status !== 'active' ? state.reward : null;
+  const abilityList = state.abilities || [];
 
   // Aplica um novo estado; o log narrativo vem PRONTO do servidor (events).
   const applyState = useCallback((next) => {
@@ -76,6 +77,20 @@ export default function Combat({ initialState, onEnd }) {
       applyState(data);
     } catch (err) {
       setLog((prev) => [...prev, err.response?.data?.error || 'Erro na reação.']);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function doAbility(slug) {
+    if (busy || !isPlayerTurn) return;
+    setBusy(true);
+    try {
+      const target = enemies.find((e) => !e.is_defeated);
+      const { data } = await combatService.action(session.id, 'ability', target?.id, undefined, slug);
+      applyState(data);
+    } catch (err) {
+      setLog((prev) => [...prev, err.response?.data?.error || 'Erro ao usar habilidade.']);
     } finally {
       setBusy(false);
     }
@@ -178,6 +193,28 @@ export default function Combat({ initialState, onEnd }) {
                 <button className="btn-ghost small" onClick={() => doAction('pass')} disabled={busy}>Passar</button>
                 <button className="btn-ghost small" onClick={doFlee} disabled={busy}>Fugir</button>
               </div>
+              {abilityList.length > 0 && (
+                <div className="combat-abilities">
+                  <div className="combat-abilities-label text-dim">Habilidades</div>
+                  <div className="combat-btn-row">
+                    {abilityList.map((ab) => {
+                      const onCd = ab.cooldown_remaining > 0;
+                      return (
+                        <button
+                          key={ab.slug}
+                          className="btn-ability"
+                          onClick={() => doAbility(ab.slug)}
+                          disabled={busy || onCd}
+                          title={ab.description || ''}
+                        >
+                          {ab.name}
+                          {onCd && <span className="ability-cd"> ({ab.cooldown_remaining})</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="combat-waiting text-dim">Os inimigos agem...</div>

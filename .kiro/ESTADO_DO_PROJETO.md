@@ -170,11 +170,22 @@ Tela de Personagem com distribuição interativa de atributos.
 cura), alocar atributos (recalcula derivados preservando bônus), derrota+respawn
 +penalidades, salvar ponto. Todos passaram; dados de teste limpos do remoto.
 
-### FALTA no Spec 2 (próximas sub-partes)
-- (b) **Habilidades de classe nv1–3** (tabela `abilities_catalog`, cooldown por
-  Velocidade, passivas nv1). Suporte-a-aliado inerte até haver party.
-- (d) **Exposição à névoa em combate** (acúmulo/penalidade/persistência).
-- (e) **Encontro automático ao mover** (atrás de flag `ENCOUNTERS_ON_MOVE`).
+### Spec 2 — Sub-partes B e E CONCLUÍDAS (testadas e2e)
+- (b) **Habilidades de classe nv1–3**: tabela `abilities_catalog` (23 habilidades:
+  15 ativas + 8 passivas) + `services/abilities.js`. Mini-sistema de efeitos por
+  turno em `combat.js` (veneno, atordoamento/paralisia, buff, furtivo, next_attack).
+  Ação `ability` no motor com cooldown por Velocidade (MP_AGI×2%, teto 40%/20%),
+  requisitos de nível/perícia, Emboscada exige furtividade, Poção em Área cura o
+  self. Painel de habilidades no frontend com cooldown. Passivas de mods diretos
+  ativas; passivas de gatilho low-HP e de exploração/info/itens REGISTRADAS mas
+  inertes até os sistemas existirem.
+- (e) **Encontro ao mover**: flag `ENCOUNTERS_ON_MOVE` (`.env`, default OFF). `/move`
+  rola `encounter_rate` do destino e retorna `encounter:true`; o cliente inicia o
+  combate via `/combat/hunt`. Documentado em `.env.example`.
+
+### FALTA no Spec 2
+- (d) **Exposição à névoa em combate** — ADIADA para pós-V1.0 (conteúdo de zonas
+  futuras com mais névoa; não há nó `mist` no mundo inicial).
 
 ### Outras pendências menores (backlog, fora de spec ainda)
 - **Excluir personagem** (rota DELETE + botão na seleção) — pedido pelo usuário e
