@@ -127,7 +127,7 @@ function clamp(v, lo, hi) {
 // ─── Snapshots ───────────────────────────────────────────────────────────────
 // Monta o participante-jogador a partir de character + derived + skills.
 // bonuses de perícia de arma/armadura entram aqui (fiel ao Volume III).
-function buildPlayerParticipant(character, derived, skills, slot = 0, attributes = null) {
+function buildPlayerParticipant(character, derived, skills, slot = 0, attributes = null, equipLayer = null) {
   const skillLevel = (slug) => {
     const s = (skills || []).find((k) => k.skill_name === slug);
     return s ? s.level : 0;
@@ -164,14 +164,38 @@ function buildPlayerParticipant(character, derived, skills, slot = 0, attributes
     _skills: Object.fromEntries((skills || []).map((k) => [k.skill_name, k.level])),
   };
 
+  // Camada de equipamento + sobrepeso (Spec 3, Sub-parte D). equipLayer é um mapa
+  // { derivado: delta } — equipamento soma (positivo), sobrepeso penaliza
+  // (negativo). Aplicada por cima do snapshot base+perícia+nível. hp_max do
+  // equipamento também eleva o HP inicial do combate proporcionalmente.
+  let hpMax = derived.hp_max;
+  let hpCurrent = derived.hp_current;
+  if (equipLayer) {
+    for (const key of Object.keys(equipLayer)) {
+      const delta = equipLayer[key] || 0;
+      if (delta === 0) continue;
+      if (key === 'hp_max') {
+        hpMax = Math.max(1, hpMax + delta);
+        // dá o bônus de HP também ao HP atual (equipar não deveria "ferir").
+        hpCurrent = Math.min(hpMax, hpCurrent + Math.max(0, delta));
+      } else if (stats[key] != null) {
+        stats[key] = stats[key] + delta;
+      }
+    }
+    // pisos de segurança para stats que não podem ficar negativos.
+    for (const key of ['attack_melee', 'attack_ranged', 'defense', 'accuracy', 'evasion', 'speed']) {
+      if (stats[key] != null && stats[key] < 0) stats[key] = 0;
+    }
+  }
+
   return {
     side: 'ally',
     character_id: character.id,
     enemy_slug: null,
     display_name: character.name,
     level: character.level,
-    hp_max: derived.hp_max,
-    hp_current: derived.hp_current,
+    hp_max: hpMax,
+    hp_current: hpCurrent,
     stats,
     effects: [],
     cooldowns: {},

@@ -41,6 +41,7 @@ export default function Combat({ initialState, onEnd }) {
   const isPlayerTurn = !ended && !awaitingReaction && ally && activeId === ally.id && !ally.is_defeated;
   const reward = session.status !== 'active' ? state.reward : null;
   const abilityList = state.abilities || [];
+  const consumableList = state.consumables || [];
 
   // Aplica um novo estado; o log narrativo vem PRONTO do servidor (events).
   const applyState = useCallback((next) => {
@@ -91,6 +92,19 @@ export default function Combat({ initialState, onEnd }) {
       applyState(data);
     } catch (err) {
       setLog((prev) => [...prev, err.response?.data?.error || 'Erro ao usar habilidade.']);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function doUseItem(inventoryId) {
+    if (busy || !isPlayerTurn) return;
+    setBusy(true);
+    try {
+      const { data } = await combatService.useItem(session.id, inventoryId);
+      applyState(data);
+    } catch (err) {
+      setLog((prev) => [...prev, err.response?.data?.error || 'Erro ao usar o item.']);
     } finally {
       setBusy(false);
     }
@@ -160,7 +174,7 @@ export default function Combat({ initialState, onEnd }) {
                   )}
                   {reward.loot && reward.loot.length > 0 && (
                     <div className="combat-reward-loot text-dim">
-                      Espólio: {reward.loot.map((d) => `${d.quantity}× ${d.item_slug}`).join(', ')}
+                      Espólio: {reward.loot.map((d) => `${d.quantity}× ${d.name || d.item_slug}`).join(', ')}
                     </div>
                   )}
                 </div>
@@ -199,19 +213,43 @@ export default function Combat({ initialState, onEnd }) {
                   <div className="combat-btn-row">
                     {abilityList.map((ab) => {
                       const onCd = ab.cooldown_remaining > 0;
+                      const noItem = !!ab.unavailable_reason;
+                      const disabled = busy || onCd || noItem;
+                      const title = ab.unavailable_reason || ab.description || '';
                       return (
                         <button
                           key={ab.slug}
                           className="btn-ability"
                           onClick={() => doAbility(ab.slug)}
-                          disabled={busy || onCd}
-                          title={ab.description || ''}
+                          disabled={disabled}
+                          title={title}
                         >
                           {ab.name}
                           {onCd && <span className="ability-cd"> ({ab.cooldown_remaining})</span>}
+                          {!onCd && ab.req_item && (
+                            <span className="ability-item"> [{ab.req_item_count}]</span>
+                          )}
                         </button>
                       );
                     })}
+                  </div>
+                </div>
+              )}
+              {consumableList.length > 0 && (
+                <div className="combat-abilities">
+                  <div className="combat-abilities-label text-dim">Itens</div>
+                  <div className="combat-btn-row">
+                    {consumableList.map((c) => (
+                      <button
+                        key={c.inventory_id}
+                        className="btn-ability"
+                        onClick={() => doUseItem(c.inventory_id)}
+                        disabled={busy}
+                        title={`Restaura ${c.heal} PV`}
+                      >
+                        {c.name}<span className="ability-item"> [{c.quantity}]</span>
+                      </button>
+                    ))}
                   </div>
                 </div>
               )}

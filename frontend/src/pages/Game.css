@@ -369,11 +369,36 @@
 
 .inventory-item:last-child { border-bottom: none; }
 
-.inv-item-info   { display: flex; align-items: center; gap: 8px; flex: 1; }
+.inv-item-info   { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
 .inv-item-name   { font-weight: 500; }
 .inv-item-qty    { font-size: 12px; }
 .inv-item-dur    { font-size: 11px; }
+.inv-item-stats  { font-size: 11px; }
 .inv-item-weight { font-size: 11px; white-space: nowrap; }
+
+.inv-item-right   { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.inv-item-actions { display: flex; gap: 6px; }
+
+.inv-btn {
+  font-size: 11px;
+  padding: 3px 8px;
+  border: 1px solid var(--color-border-gold);
+  background: transparent;
+  color: var(--color-gold);
+  border-radius: 3px;
+  cursor: pointer;
+}
+.inv-btn:hover { background: rgba(201, 168, 76, 0.12); }
+.inv-btn-danger {
+  border-color: #7a3030;
+  color: #c97a7a;
+}
+.inv-btn-danger:hover { background: rgba(197, 48, 48, 0.12); }
+
+/* Modificadores de derivado por equipamento/sobrepeso */
+.derived-mod-up   { color: #48bb78; font-size: 12px; }
+.derived-mod-down { color: #c97a7a; font-size: 12px; }
+.overweight-warn  { font-weight: 500; }
 
 /* ── Introdução ── */
 .intro-screen {

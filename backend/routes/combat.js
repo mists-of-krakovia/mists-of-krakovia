@@ -21,6 +21,7 @@ const combat = require('../services/combat');
 const progression = require('../services/progression');
 const loot = require('../services/loot');
 const abilities = require('../services/abilities');
+const equipment = require('../services/equipment');
 
 router.use(authenticateToken);
 
@@ -123,7 +124,13 @@ async function syncPlayerHp(participants) {
   // Persiste o HP em que a luta terminou. Piso de 1: ainda não há sistema de
   // morte/reanimação, então deixar o personagem com 0 HP travaria o jogo.
   // (Quando o fluxo de derrota existir, remover o piso.)
-  const hp = Math.max(1, player.hp_current);
+  // Teto: o hp_max do combate pode estar inflado pelo bônus de equipamento (camada
+  // não persistida). Limita ao hp_max BASE de character_derived para não gravar um
+  // hp_current acima do teto persistido.
+  const { data: derivedRow } = await supabase
+    .from('character_derived').select('hp_max').eq('character_id', player.character_id).single();
+  const baseHpMax = derivedRow?.hp_max ?? player.hp_current;
+  const hp = Math.max(1, Math.min(player.hp_current, baseHpMax));
   await supabase
     .from('character_derived')
     .update({ hp_current: hp })
@@ -239,6 +246,7 @@ function statePayload(session, participants) {
     events: session._events || [],
     reward: session._reward || null,
     abilities: session._abilities || [],
+    consumables: session._consumables || [],
   };
 }
 
@@ -259,11 +267,91 @@ async function attachAbilities(session, participants) {
   const active = abilities.availableAbilities(catalog || [], character.level, skillLevels);
   const cds = player.cooldowns || {};
 
-  session._abilities = active.map((ab) => ({
-    slug: ab.slug, name: ab.name, kind: ab.kind, target: ab.target,
-    cooldown_base: ab.cooldown_base, cooldown_remaining: cds[ab.slug] || 0,
-    description: ab.description,
-  }));
+  // Custo de item (Spec 3, Sub-parte E): cruza com o inventário. Habilidade com
+  // effect.req_item sem unidade fica marcada como indisponível (motivo), mas
+  // continua aparecendo no painel (o cliente a mostra desabilitada).
+  const itemCounts = await playerItemCounts(player.character_id);
+
+  // Consumíveis usáveis diretamente no combate (ação Usar Item): só os que têm
+  // efeito de uso direto por ora (heal). Agrupa por linha de inventário.
+  await attachConsumables(session, player.character_id);
+
+  session._abilities = active.map((ab) => {
+    const reqItem = (ab.effect || {}).req_item || null;
+    const missingItem = reqItem ? (itemCounts[reqItem] || 0) <= 0 : false;
+    return {
+      slug: ab.slug, name: ab.name, kind: ab.kind, target: ab.target,
+      cooldown_base: ab.cooldown_base, cooldown_remaining: cds[ab.slug] || 0,
+      description: ab.description,
+      req_item: reqItem,
+      req_item_count: reqItem ? (itemCounts[reqItem] || 0) : null,
+      unavailable_reason: missingItem ? `Requer ${reqItem} no inventário.` : null,
+    };
+  });
+}
+
+// Anexa ao payload os consumíveis usáveis diretamente no combate (ação Usar Item).
+// Por ora, apenas os que têm efeito de uso direto (heal). Cada entrada aponta a
+// linha de inventário (inventoryId) para a rota /item.
+async function attachConsumables(session, characterId) {
+  if (!characterId) { session._consumables = []; return; }
+  const { data } = await supabase
+    .from('character_inventory')
+    .select('id, quantity, is_equipped, items ( slug, name, item_type, stats )')
+    .eq('character_id', characterId)
+    .eq('is_equipped', false);
+  const list = [];
+  for (const row of data || []) {
+    const item = row.items || {};
+    if (item.item_type !== 'consumable') continue;
+    if (!(item.stats && item.stats.heal > 0)) continue; // só uso direto por ora
+    list.push({
+      inventory_id: row.id, slug: item.slug, name: item.name,
+      quantity: row.quantity, heal: item.stats.heal,
+    });
+  }
+  session._consumables = list;
+}
+
+// Conta as unidades de cada item (por slug) no inventário do personagem — para o
+// custo de item das habilidades e o menu Usar Item. Retorna { slug: quantidade }.
+async function playerItemCounts(characterId) {
+  if (!characterId) return {};
+  const { data } = await supabase
+    .from('character_inventory')
+    .select('quantity, items ( slug, item_type )')
+    .eq('character_id', characterId);
+  const counts = {};
+  for (const row of data || []) {
+    const slug = row.items?.slug;
+    if (!slug) continue;
+    counts[slug] = (counts[slug] || 0) + (row.quantity || 0);
+  }
+  return counts;
+}
+
+// Consome 1 unidade de um item (por slug) do inventário do personagem. Usa a
+// linha não-equipada; decrementa quantity (remove a 0). Retorna true se consumiu.
+async function consumeItem(characterId, itemSlug) {
+  const { data: item } = await supabase.from('items').select('id').eq('slug', itemSlug).single();
+  if (!item) return false;
+  const { data: row } = await supabase
+    .from('character_inventory')
+    .select('id, quantity')
+    .eq('character_id', characterId)
+    .eq('item_id', item.id)
+    .eq('is_equipped', false)
+    .order('quantity', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!row || (row.quantity || 0) <= 0) return false;
+  const newQty = row.quantity - 1;
+  if (newQty <= 0) {
+    await supabase.from('character_inventory').delete().eq('id', row.id);
+  } else {
+    await supabase.from('character_inventory').update({ quantity: newQty }).eq('id', row.id);
+  }
+  return true;
 }
 
 // Adiciona linha(s) de narração ao acumulador da requisição.
@@ -296,6 +384,14 @@ async function useAbility(session, participants, actor, abilitySlug, targetId) {
   const cds = actor.cooldowns || {};
   if ((cds[abilitySlug] || 0) > 0) return `Habilidade em recarga (${cds[abilitySlug]} turno(s)).`;
 
+  // Custo de item (Spec 3, Sub-parte E): se a habilidade exige um item, precisa
+  // ter ao menos 1 no inventário. Não consome o turno se faltar.
+  const reqItem = (ability.effect || {}).req_item || null;
+  if (reqItem) {
+    const counts = await playerItemCounts(actor.character_id);
+    if ((counts[reqItem] || 0) <= 0) return `Requer ${reqItem} no inventário.`;
+  }
+
   // Alvo: para 'enemy' pega o alvo informado ou o primeiro inimigo vivo.
   let target = null;
   if (ability.target === 'enemy') {
@@ -306,8 +402,15 @@ async function useAbility(session, participants, actor, abilitySlug, targetId) {
   const out = abilities.resolveAbility({ ability, actor, target });
   if (out.invalid) {
     // pré-requisito de estado não atendido (ex.: Emboscada sem furtividade):
-    // devolve erro para o cliente; NÃO consome o turno.
+    // devolve erro para o cliente; NÃO consome o turno (nem o item).
     return out.lines[out.lines.length - 1] || 'Não é possível usar esta habilidade agora.';
+  }
+  // Consome o item requerido (a habilidade teve efeito). Se, por corrida, não
+  // houver mais o item, aborta sem consumir turno.
+  if (reqItem) {
+    const consumed = await consumeItem(actor.character_id, reqItem);
+    if (!consumed) return `Requer ${reqItem} no inventário.`;
+    pushEvent(session, `(${reqItem} consumido.)`);
   }
   for (const l of out.lines) pushEvent(session, l);
   if (target && target.is_defeated) pushEvent(session, combat.narrateDefeat(target));
@@ -496,15 +599,15 @@ async function grantVictoryRewards(session, participants, enemyRows) {
     }
   }
 
-  // Loot (loop pronto; concessão inerte enquanto loot_table vazia).
+  // Loot: rola a loot_table dos derrotados e concede de verdade ao personagem.
   const drops = loot.rollLoot(enemyRows, defeatedSlugs);
-  const grantedLoot = await loot.grantLoot(drops);
+  const grantedLoot = await loot.grantLoot(supabase, player.character_id, drops);
 
   // Narração da recompensa.
   pushEvent(session, `Vitória! Você ganhou ${xpGained} de XP.`);
   for (const line of prog.summary) pushEvent(session, line);
   if (grantedLoot.length) {
-    pushEvent(session, `Espólio: ${grantedLoot.map((d) => `${d.quantity}× ${d.item_slug}`).join(', ')}.`);
+    pushEvent(session, `Espólio: ${grantedLoot.map((d) => `${d.quantity}× ${d.name}`).join(', ')}.`);
   }
 
   session._reward = {
@@ -577,8 +680,18 @@ router.post('/hunt', async (req, res) => {
       ? character.character_attributes[0] : character.character_attributes;
     const skills = character.character_skills || [];
 
+    // Camada de equipamento + sobrepeso (Spec 3, Sub-parte D): soma bônus dos
+    // itens equipados e aplica penalidade de sobrepeso ao snapshot de combate.
+    const { data: invRows } = await supabase
+      .from('character_inventory')
+      .select('id, quantity, is_equipped, equipped_slot, items ( slug, name, weight, stats )')
+      .eq('character_id', characterId);
+    const equippedItems = (invRows || []).filter((r) => r.is_equipped);
+    const { layer: equipLayer } = equipment.combinedLayer(
+      equippedItems, invRows || [], derived.carry_capacity || 0);
+
     const count = combat.rng(picked.min_count, picked.max_count);
-    const playerP = combat.buildPlayerParticipant(character, derived, skills, 0, attributes);
+    const playerP = combat.buildPlayerParticipant(character, derived, skills, 0, attributes, equipLayer);
 
     // Passivas de combate: aplicadas no snapshot do jogador.
     const { data: classAbilities } = await supabase
@@ -690,6 +803,84 @@ router.post('/:sessionId/action', async (req, res) => {
   } catch (err) {
     console.error('[combat/action] EXCEPTION:', err && err.message);
     res.status(500).json({ error: 'Erro ao processar ação.' });
+  }
+});
+
+// ─── POST /combat/:sessionId/item — Usar Item (consumível) ───────────────────
+// Spec 3, Sub-parte E. Usa um consumível do inventário durante o combate. Aplica
+// o efeito no snapshot do jogador (ex.: pocao_cura restaura PV), consome 1 unidade
+// e gasta a ação (avança o turno como qualquer ação do jogador).
+router.post('/:sessionId/item', async (req, res) => {
+  try {
+    const { inventoryId } = req.body;
+    const { session, participants, error } = await loadSession(req.params.sessionId, req.userId);
+    if (error) return res.status(404).json({ error });
+    if (session.status !== 'active') return res.status(409).json({ error: 'Combate encerrado.' });
+    if (session.pending && session.pending.awaiting_reaction) {
+      return res.status(409).json({ error: 'Há uma reação pendente. Use /react.' });
+    }
+
+    const actorId = session.turn_order[session.active_index];
+    const actor = byId(participants, actorId);
+    if (!actor || actor.side !== 'ally') {
+      return res.status(409).json({ error: 'Não é a vez do jogador.' });
+    }
+    if (!inventoryId) return res.status(400).json({ error: 'inventoryId obrigatório.' });
+
+    // Carrega a linha do inventário (com o item) e valida posse + tipo.
+    const { data: row } = await supabase
+      .from('character_inventory')
+      .select('id, quantity, is_equipped, items ( slug, name, item_type, stats )')
+      .eq('id', inventoryId)
+      .eq('character_id', actor.character_id)
+      .maybeSingle();
+    if (!row) return res.status(404).json({ error: 'Item não encontrado no inventário.' });
+    const item = row.items || {};
+    if (item.item_type !== 'consumable') {
+      return res.status(400).json({ error: 'Este item não é consumível.' });
+    }
+    if ((row.quantity || 0) <= 0) return res.status(400).json({ error: 'Sem unidades deste item.' });
+
+    // Efeito. Por ora, cura (pocao_cura). Consumíveis cujo efeito ativo pertence a
+    // habilidades (frasco de veneno, granadas) não têm uso direto aqui.
+    const effect = item.stats || {};
+    if (effect.heal) {
+      const before = actor.hp_current;
+      actor.hp_current = Math.min(actor.hp_max, actor.hp_current + effect.heal);
+      pushEvent(session, `Você usou ${item.name} e recuperou ${actor.hp_current - before} de PV.`);
+    } else {
+      return res.status(400).json({ error: 'Este item não tem efeito de uso direto em combate.' });
+    }
+
+    // Consome 1 unidade.
+    const newQty = (row.quantity || 1) - 1;
+    if (newQty <= 0) await supabase.from('character_inventory').delete().eq('id', row.id);
+    else await supabase.from('character_inventory').update({ quantity: newQty }).eq('id', row.id);
+
+    await logTurn(session.id, session.round_number, session.active_index, actor.id, null,
+      `use_item_${item.slug}`, { heal: effect.heal || 0 });
+
+    // Gasta a ação (respeita ações adicionais, como as demais ações).
+    if (actor.extra_actions > 0) actor.extra_actions -= 1;
+    else session.active_index += 1;
+
+    const endNow = combat.checkEnd(participants);
+    if (endNow !== 'active') {
+      const step = await runEnemyTurns(session, participants);
+      if (step.ended) session.ended_at = new Date().toISOString();
+    } else {
+      session.status = endNow;
+      session.ended_at = new Date().toISOString();
+    }
+
+    await finalizeIfEnded(session, participants);
+    await saveAllParticipants(participants);
+    await saveSession(session);
+    await attachAbilities(session, participants);
+    res.json(statePayload(session, participants));
+  } catch (err) {
+    console.error('[combat/item] EXCEPTION:', err && err.message);
+    res.status(500).json({ error: 'Erro ao usar o item.' });
   }
 });
 

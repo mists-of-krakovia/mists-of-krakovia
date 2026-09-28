@@ -188,11 +188,52 @@ cura), alocar atributos (recalcula derivados preservando bônus), derrota+respaw
 - (d) **Exposição à névoa em combate** — ADIADA para pós-V1.0 (conteúdo de zonas
   futuras com mais névoa; não há nó `mist` no mundo inicial).
 
+### Spec 3 — INVENTÁRIO / ITENS — CONCLUÍDO (código; e2e HTTP pendente do usuário)
+Spec completo em `.kiro/specs/inventario/`. Sub-partes A–E implementadas e
+verificadas (node --check, testes unitários/integração REST, lint 0, build ok).
+
+**Banco (migrations 20260927222255–222258, aplicadas no remoto):**
+- Enum `item_rarity` expandido: +`epic`, +`legendary` (`unique` mantido — está em
+  uso por 2 itens narrativos pré-existentes: `diario_edric_holt`, `placa_do_guarda`).
+- `items`: +`base_value`, +`is_stackable`, +`is_corrupted` (🔮 inerte),
+  +`corruption` jsonb (🔮 inerte). Índice de empilhamento = no-op (empilhamento
+  controlado na aplicação).
+- Seed (via scripts Node REST, não `db push`): 20 itens MVP (11 common + 9 uncommon)
+  em `scripts/seed-items.js`; `loot_table` dos 3 inimigos em `scripts/seed-loot.js`;
+  `effect.req_item` nas 4 habilidades em `scripts/seed-ability-items.js`. Fonte
+  canônica espelhada em `supabase/seed.sql`.
+
+**Backend:**
+- `services/equipment.js` (novo): `equipmentBonus` (+`bySource`), `canEquip`
+  (requisito MG/perícia), `totalWeight`, `weightPenalty` (sobrepeso pesado: −Vel/−Eva
+  por faixa de excesso; immobile >150%), `combinedLayer`.
+- `services/loot.js`: `grantLoot(supabase, characterId, drops)` real (resolve
+  slug→id, empilha stackáveis, insere equipáveis, retorna name/rarity).
+- `routes/inventory.js` (novo): equip/unequip/use/discard (montado em `/characters`).
+  Acessório genérico → primeiro `accessory_1/2` livre.
+- `routes/combat.js`: hunt aplica a camada de equipamento no snapshot; custo de item
+  das habilidades (indisponível sem item, consome 1 ao usar); ação **Usar Item**
+  (`/combat/:id/item`); `syncPlayerHp` limita ao hp_max base.
+- `routes/characters.js`: `/enter` devolve `equipmentBonus`, `equipmentBySource`,
+  `weightPenalty`; inventory com `stats/requirements/is_stackable/base_value`.
+- `combat.js`: `buildPlayerParticipant` recebe a camada de equipamento (6º param).
+
+**Frontend:** página Inventário com ações (Equipar/Desequipar/Usar/Descartar) + 9
+slots (`accessory_1/2`); tela Personagem mostra a origem de cada derivado
+(base+nível vs equip) e aviso de sobrepeso; Combat com botão Usar Item e habilidade
+desabilitada com motivo quando falta o item.
+
+**Registrado como 🔮 (não implementado):** itens Corrompidos + stat de **Mutação**
+(colunas inertes); raridades rare/epic/legendary como conteúdo; fabricação;
+economia/moeda/loja; durabilidade/desgaste.
+
+**Pendente:** e2e HTTP (subir o servidor — usuário) e commit.
+
 ### Outras pendências menores (backlog, fora de spec ainda)
 - **Excluir personagem** (rota DELETE + botão na seleção) — pedido pelo usuário e
   pelo doc de interface, ainda NÃO implementado.
 - **Regeneração de estamina** (doc define regen; hoje só decresce).
-- **Ações de inventário** (equipar/usar/descartar) — hoje só leitura.
+- ~~**Ações de inventário** (equipar/usar/descartar)~~ — FEITO no Spec 3 (Inventário).
 - **OAuth Google / "esqueci a senha"** — login é só email+senha.
 - **Diálogo NPC + confiança/reputação**: CONFLITO a resolver — schema usa árvore
   de diálogo (dialogue_*), mas doc de interface pede motor de palavras-chave +

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGame } from '../context/GameContext';
-import { characterService, skillService, combatService } from '../services/api';
+import { characterService, skillService, combatService, inventoryService } from '../services/api';
 import Combat from './Combat';
 import './Game.css';
 
@@ -26,13 +26,14 @@ const CLASS_LABELS = {
 };
 
 const EQUIPMENT_SLOTS = [
-  { key: 'head',      label: 'Cabeça'          },
-  { key: 'chest',     label: 'Tórax'           },
-  { key: 'hands',     label: 'Mãos'            },
-  { key: 'legs',      label: 'Pernas'          },
-  { key: 'main_hand', label: 'Arma Principal'  },
-  { key: 'off_hand',  label: 'Arma Secundária' },
-  { key: 'accessory', label: 'Acessório'       },
+  { key: 'head',        label: 'Cabeça'          },
+  { key: 'chest',       label: 'Tórax'           },
+  { key: 'hands',       label: 'Mãos'            },
+  { key: 'legs',        label: 'Pernas'          },
+  { key: 'main_hand',   label: 'Arma Principal'  },
+  { key: 'off_hand',    label: 'Arma Secundária' },
+  { key: 'accessory_1', label: 'Acessório I'     },
+  { key: 'accessory_2', label: 'Acessório II'    },
 ];
 
 const GRADE = [
@@ -210,9 +211,13 @@ const ATTR_ORDER = [
   { key: 'sanity',     abbr: 'SAN', label: 'Sanidade'    },
 ];
 
-function PageCharacter({ character, inventory, onAllocateAttributes }) {
+function PageCharacter({ character, inventory, onAllocateAttributes, equipmentBonus, weightPenalty }) {
   const attrs   = character?.character_attributes || {};
   const derived = character?.character_derived    || {};
+  const equipBonus = equipmentBonus || {};
+  const weight = weightPenalty || null;
+  // Penalidade de sobrepeso incide sobre alguns derivados (speed/evasion).
+  const overweightMods = (weight && weight.mods) || {};
 
   const available = attrs.points_available ?? 0;
 
@@ -256,21 +261,24 @@ function PageCharacter({ character, inventory, onAllocateAttributes }) {
     }
   });
 
+  // Modificador total de equipamento+sobrepeso por derivado (para exibir a origem).
+  const layerOf = (key) => (equipBonus[key] || 0) + (overweightMods[key] || 0);
+
   const derivedAttrs = [
-    { label: 'Pontos de Vida',   val: `${derived.hp_current ?? '—'}/${derived.hp_max ?? '—'}` },
-    { label: 'Estamina',         val: `${derived.stamina_current ?? '—'}/${derived.stamina_max ?? '—'}` },
-    { label: 'Ataque C.C.',      val: derived.attack_melee      ?? '—' },
-    { label: 'Ataque Distância', val: derived.attack_ranged     ?? '—' },
-    { label: 'Defesa',           val: derived.defense           ?? '—' },
-    { label: 'Evasão',           val: derived.evasion           ?? '—' },
-    { label: 'Velocidade',       val: derived.speed             ?? '—' },
-    { label: 'Acerto',           val: derived.accuracy          ?? '—' },
-    { label: 'Crítico',          val: derived.crit_chance ? `${derived.crit_chance}%` : '—' },
-    { label: 'Dano Crítico',     val: derived.crit_damage ? `${derived.crit_damage}×` : '—' },
-    { label: 'Observação',       val: derived.observation       ?? '—' },
-    { label: 'R. Mental',        val: derived.mental_resistance ?? '—' },
-    { label: 'R. Névoa',         val: derived.mist_resistance   ?? '—' },
-    { label: 'Carga máx.',       val: derived.carry_capacity ? `${derived.carry_capacity}kg` : '—' },
+    { key: 'hp_max',            label: 'Pontos de Vida',   val: `${derived.hp_current ?? '—'}/${derived.hp_max ?? '—'}` },
+    { key: 'stamina_max',       label: 'Estamina',         val: `${derived.stamina_current ?? '—'}/${derived.stamina_max ?? '—'}` },
+    { key: 'attack_melee',      label: 'Ataque C.C.',      val: derived.attack_melee      ?? '—' },
+    { key: 'attack_ranged',     label: 'Ataque Distância', val: derived.attack_ranged     ?? '—' },
+    { key: 'defense',           label: 'Defesa',           val: derived.defense           ?? '—' },
+    { key: 'evasion',           label: 'Evasão',           val: derived.evasion           ?? '—' },
+    { key: 'speed',             label: 'Velocidade',       val: derived.speed             ?? '—' },
+    { key: 'accuracy',          label: 'Acerto',           val: derived.accuracy          ?? '—' },
+    { key: 'crit_chance',       label: 'Crítico',          val: derived.crit_chance ? `${derived.crit_chance}%` : '—' },
+    { key: 'crit_damage',       label: 'Dano Crítico',     val: derived.crit_damage ? `${derived.crit_damage}×` : '—' },
+    { key: 'observation',       label: 'Observação',       val: derived.observation       ?? '—' },
+    { key: 'mental_resistance', label: 'R. Mental',        val: derived.mental_resistance ?? '—' },
+    { key: 'mist_resistance',   label: 'R. Névoa',         val: derived.mist_resistance   ?? '—' },
+    { key: 'carry_capacity',    label: 'Carga máx.',       val: derived.carry_capacity ? `${derived.carry_capacity}kg` : '—' },
   ];
 
   return (
@@ -363,21 +371,68 @@ function PageCharacter({ character, inventory, onAllocateAttributes }) {
 
       <div className="char-page-section">
         <div className="section-label text-dim">Atributos Derivados</div>
+        {weight && weight.level !== 'ok' && (
+          <p className="overweight-warn text-danger" style={{ fontSize: 12, margin: '0 0 8px' }}>
+            Sobrepeso ({weight.excessPct}% acima da carga): Velocidade e Evasão reduzidas
+            {weight.blockMobility ? '; mobilidade bloqueada em combate' : ''}.
+          </p>
+        )}
         <div className="derived-table">
-          {derivedAttrs.map(a => (
-            <div key={a.label} className="derived-table-row">
-              <span className="derived-label text-dim">{a.label}</span>
-              <span className="derived-val">{a.val}</span>
-            </div>
-          ))}
+          {derivedAttrs.map(a => {
+            const mod = layerOf(a.key);
+            return (
+              <div key={a.label} className="derived-table-row">
+                <span className="derived-label text-dim">{a.label}</span>
+                <span className="derived-val">
+                  {a.val}
+                  {mod !== 0 && (
+                    <span
+                      className={mod > 0 ? 'derived-mod-up' : 'derived-mod-down'}
+                      title="Modificador de equipamento/sobrepeso"
+                    >
+                      {' '}({mod > 0 ? '+' : ''}{mod})
+                    </span>
+                  )}
+                </span>
+              </div>
+            );
+          })}
         </div>
+        <p className="text-dim" style={{ fontSize: 11, marginTop: 6, fontStyle: 'italic' }}>
+          Os valores mostram base + nível. Entre parênteses, o efeito de equipamento e sobrepeso.
+        </p>
       </div>
     </div>
   );
 }
 
 // ─── Página: Inventário ──────────────────────────────────────────────
-function PageInventory({ inventory, derived }) {
+const RARITY_COLORS = {
+  common:    'var(--color-text-dim)',
+  uncommon:  '#48bb78',
+  rare:      '#63b3ed',
+  epic:      '#b794f4',
+  legendary: '#f6ad55',
+  unique:    'var(--color-gold)',
+};
+
+// Resumo legível dos bônus de um item (para tooltip/linha).
+const STAT_LABELS = {
+  attack_melee: 'Atq C.C.', attack_ranged: 'Atq Dist.', accuracy: 'Acerto',
+  defense: 'Defesa', evasion: 'Evasão', speed: 'Velocidade', hp_max: 'PV',
+  crit_chance: 'Crít%', crit_damage: 'Dano Crít', mist_resistance: 'R.Névoa',
+  mental_resistance: 'R.Mental', observation: 'Observação', heal: 'Cura',
+};
+
+function statsSummary(stats) {
+  const s = stats || {};
+  return Object.keys(s)
+    .filter(k => STAT_LABELS[k])
+    .map(k => `${STAT_LABELS[k]} ${s[k] > 0 ? '+' : ''}${s[k]}`)
+    .join(', ');
+}
+
+function PageInventory({ inventory, derived, onAction }) {
   const items    = inventory || [];
   const equipped = items.filter(i => i.is_equipped);
   const backpack = items.filter(i => !i.is_equipped);
@@ -387,15 +442,14 @@ function PageInventory({ inventory, derived }) {
   const weightPct   = maxWeight ? Math.min((totalWeight / maxWeight) * 100, 100) : 0;
   const weightOver  = totalWeight > maxWeight;
 
-  const RARITY_COLORS = {
-    common:   'var(--color-text-dim)',
-    uncommon: '#48bb78',
-    rare:     '#63b3ed',
-    unique:   'var(--color-gold)',
-  };
-
   function ItemRow({ inv }) {
     const item = inv.items || {};
+    const summary = statsSummary(item.stats);
+    const isEquippable = item.is_equippable;
+    const isConsumable = item.item_type === 'consumable';
+    // 'use' só faz sentido fora de combate para consumíveis com efeito de cura.
+    const usableOutOfCombat = isConsumable && (item.stats?.heal > 0);
+
     return (
       <div className="inventory-item">
         <div className="inv-item-info">
@@ -406,13 +460,28 @@ function PageInventory({ inventory, derived }) {
           {inv.quantity > 1 && (
             <span className="inv-item-qty text-dim">×{inv.quantity}</span>
           )}
-          {inv.durability !== null && inv.durability !== undefined && (
-            <span className="inv-item-dur text-dim">Dur. {inv.durability}</span>
-          )}
+          {summary && <span className="inv-item-stats text-dim"> — {summary}</span>}
         </div>
-        <span className="inv-item-weight text-dim">
-          {((item.weight || 0) * (inv.quantity || 1)).toFixed(1)}kg
-        </span>
+        <div className="inv-item-right">
+          <span className="inv-item-weight text-dim">
+            {((item.weight || 0) * (inv.quantity || 1)).toFixed(1)}kg
+          </span>
+          <span className="inv-item-actions">
+            {isEquippable && !inv.is_equipped && (
+              <button className="inv-btn" onClick={() => onAction('equip', inv.id)}>Equipar</button>
+            )}
+            {isEquippable && inv.is_equipped && (
+              <button className="inv-btn" onClick={() => onAction('unequip', inv.id)}>Desequipar</button>
+            )}
+            {usableOutOfCombat && (
+              <button className="inv-btn" onClick={() => onAction('use', inv.id)}>Usar</button>
+            )}
+            {!inv.is_equipped && (
+              <button className="inv-btn inv-btn-danger"
+                onClick={() => onAction('discard', inv.id, 1)}>Descartar</button>
+            )}
+          </span>
+        </div>
       </div>
     );
   }
@@ -910,6 +979,20 @@ export default function Game() {
     await loadGameState();
   }
 
+  // Ações de inventário (equipar/desequipar/usar/descartar). Cada uma recarrega
+  // o estado do jogo ao concluir. Em erro, mostra a mensagem do backend.
+  async function handleInventoryAction(action, inventoryId, quantity) {
+    try {
+      if (action === 'equip')        await inventoryService.equip(character.id, inventoryId);
+      else if (action === 'unequip') await inventoryService.unequip(character.id, inventoryId);
+      else if (action === 'use')     await inventoryService.use(character.id, inventoryId);
+      else if (action === 'discard') await inventoryService.discard(character.id, inventoryId, quantity);
+      await loadGameState();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Não foi possível concluir a ação.');
+    }
+  }
+
   // Caçar: inicia um combate no nó atual e abre a tela de combate.
   async function handleHunt() {
     if (hunting || combatState) return;
@@ -987,9 +1070,15 @@ export default function Game() {
           character={char}
           inventory={gameState.inventory || []}
           onAllocateAttributes={handleAllocateAttributes}
+          equipmentBonus={gameState.equipmentBonus || {}}
+          weightPenalty={gameState.weightPenalty || null}
         />;
       case 'inventory':
-        return <PageInventory inventory={gameState.inventory || []} derived={derived} />;
+        return <PageInventory
+          inventory={gameState.inventory || []}
+          derived={derived}
+          onAction={handleInventoryAction}
+        />;
       case 'quests':
         return <PageUnderConstruction label="Missões" />;
       case 'documents':

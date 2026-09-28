@@ -67,6 +67,21 @@ export const skillService = {
     api.get('/skills/catalog')
 };
 
+// Inventário (ações fora de combate)
+export const inventoryService = {
+  equip: (characterId, inventoryId) =>
+    api.post(`/characters/${characterId}/inventory/equip`, { inventoryId }),
+
+  unequip: (characterId, inventoryId) =>
+    api.post(`/characters/${characterId}/inventory/unequip`, { inventoryId }),
+
+  use: (characterId, inventoryId) =>
+    api.post(`/characters/${characterId}/inventory/use`, { inventoryId }),
+
+  discard: (characterId, inventoryId, quantity) =>
+    api.post(`/characters/${characterId}/inventory/discard`, { inventoryId, quantity })
+};
+
 // Mundo
 export const worldService = {
   getClock: () =>
@@ -94,6 +109,10 @@ export const combatService = {
   // Resposta ao prompt de reação. reaction: 'block' | 'dodge' | 'pass'.
   react: (sessionId, reaction) =>
     api.post(`/combat/${sessionId}/react`, { reaction }),
+
+  // Usar um item consumível durante o combate.
+  useItem: (sessionId, inventoryId) =>
+    api.post(`/combat/${sessionId}/item`, { inventoryId }),
 
   // Tentativa de fuga.
   flee: (sessionId) =>

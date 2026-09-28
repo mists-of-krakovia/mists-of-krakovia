@@ -62,8 +62,10 @@ e XP/Nível. ✅
   pontos disponíveis; distribuição interativa. ✅
 - **Habilidades** 🔮 — lista de habilidades de classe (passivas/ativas). Ainda não
   há página dedicada; as habilidades aparecem no painel de combate.
-- **Inventário** ✅ leitura (grade de itens + slots de equipamento + peso/carga).
-  🔮 Ações (Equipar/Usar/Descartar) ainda não implementadas.
+- **Inventário** ✅ leitura (grade de itens + **9 slots** de equipamento: cabeça,
+  tórax, mãos, pernas, arma principal, arma secundária, 2 acessórios + peso/carga).
+  🔄 Ações (Equipar/Desequipar/Usar/Descartar), loot real e equipamento afetando os
+  derivados estão especificados em `.kiro/specs/inventario/` (em implementação).
 - **Documentos** 🔮 — arquivo de textos por categoria; começa com 3 documentos
   comuns. Placeholder.
 - **Missões** 🔮 — lista de ativas/concluídas, sem marcadores no mapa. Placeholder.
@@ -152,6 +154,40 @@ cresce com a prática. Ainda não implementado.
 - **Confiança e Reputação:** NPC tem confiança 0–100 (por reputação de facção,
   missões, escolhas). Nunca exibida como número — comunicada pelo tom. Confiança
   alta abre fragmentos narrativos e missões exclusivas.
+
+---
+
+## Parte VI-B — Itens, Raridade e Economia
+
+Detalhes de sistema em `.kiro/specs/inventario/`. Resumo canônico:
+
+### Raridade (`item_rarity`)
+Cinco níveis. Raridade **influencia a qualidade dos atributos** do equipamento.
+
+| Raridade | Estado | Obtenção |
+|----------|:------:|----------|
+| Comum (`common`) | ✅ MVP | Drop e/ou fabricação |
+| Incomum (`uncommon`) | ✅ MVP | Drop e/ou fabricação |
+| Raro (`rare`) | 🔮 | Drop e/ou fabricação |
+| Épico (`epic`) | 🔮 | **Drop de boss** e fabricação — item **nomeado** |
+| Lendário (`legendary`) | 🔮 | **Só fabricação** — item **nomeado** |
+
+> Épicos e lendários são **nomeados** e valorizam a **produção** (sistema futuro). O
+> MVP entrega apenas comuns e incomuns.
+
+### Equipamento e derivados
+Itens equipados somam aos derivados; equipamento normal **nunca reduz** (só itens
+Corrompidos 🔮 — ver Volume III, Mutação). 9 slots de equipamento.
+
+### Consumíveis e habilidades
+Consumíveis (poção, frasco de veneno, granadas) podem ser usados fora e dentro do
+combate. As habilidades **Granada Química, Ataque Envenenado, Poção em Área e Gás
+Paralisante exigem e consomem** o item correspondente (sem o item, ficam
+indisponíveis).
+
+### Valor base e economia 🔮
+Cada item tem um **valor base** (campo preparado para a economia). Moeda, loja e
+comércio entre jogadores são 🔮 planejados (ver Multiplayer e Monetização abaixo).
 
 ---
 

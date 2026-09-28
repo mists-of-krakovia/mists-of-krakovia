@@ -31,13 +31,70 @@ function rollLoot(enemyRows, defeatedSlugs) {
   return drops;
 }
 
-// Concede o loot ao personagem. STUB por ora: quando o sistema de itens existir,
-// aqui fará upsert em character_inventory (resolvendo item_slug -> item_id).
-// Retorna os drops concedidos (para o payload de recompensa).
-async function grantLoot(/* supabase, characterId, */ drops) {
-  // TODO(spec de itens): inserir/upsert em character_inventory.
-  // Enquanto isso, apenas repassa os drops (loop pronto, concessão inerte).
-  return drops;
+// Concede o loot ao personagem — Spec 3 (Inventário), Sub-parte B.
+// Resolve item_slug -> item (id, name, rarity, is_stackable) e grava em
+// character_inventory: stackáveis empilham (lê linha existente na mochila e soma
+// quantity; senão insere); equipáveis criam 1 linha por unidade. Empilhamento é
+// controlado aqui (não há índice único — ver design §1.2).
+//   supabase: cliente service_role.  characterId: dono do loot.
+//   drops: [{ item_slug, quantity }] vindo de rollLoot.
+// Retorna [{ item_slug, quantity, name, rarity }] para o payload de recompensa.
+async function grantLoot(supabase, characterId, drops) {
+  if (!drops || drops.length === 0) return [];
+
+  // Resolve os itens dos slugs dropados (uma query).
+  const slugs = [...new Set(drops.map((d) => d.item_slug))];
+  const { data: items, error } = await supabase
+    .from('items')
+    .select('id, slug, name, rarity, is_stackable')
+    .in('slug', slugs);
+  if (error) {
+    console.error('[grantLoot] erro ao resolver itens:', error.message);
+    return [];
+  }
+  const bySlug = {};
+  for (const it of items || []) bySlug[it.slug] = it;
+
+  const granted = [];
+  for (const drop of drops) {
+    const item = bySlug[drop.item_slug];
+    if (!item) {
+      // slug de loot sem item correspondente no catálogo: ignora com aviso.
+      console.warn(`[grantLoot] item_slug sem item no catálogo: ${drop.item_slug}`);
+      continue;
+    }
+    const qty = Math.max(1, drop.quantity || 1);
+
+    if (item.is_stackable) {
+      // Empilha: procura a linha não equipada existente e soma; senão insere.
+      const { data: existing } = await supabase
+        .from('character_inventory')
+        .select('id, quantity')
+        .eq('character_id', characterId)
+        .eq('item_id', item.id)
+        .eq('is_equipped', false)
+        .maybeSingle();
+      if (existing) {
+        await supabase
+          .from('character_inventory')
+          .update({ quantity: (existing.quantity || 0) + qty })
+          .eq('id', existing.id);
+      } else {
+        await supabase.from('character_inventory').insert({
+          character_id: characterId, item_id: item.id, quantity: qty, is_equipped: false,
+        });
+      }
+    } else {
+      // Equipável/não empilhável: 1 linha por unidade.
+      const rows = Array.from({ length: qty }, () => ({
+        character_id: characterId, item_id: item.id, quantity: 1, is_equipped: false,
+      }));
+      await supabase.from('character_inventory').insert(rows);
+    }
+
+    granted.push({ item_slug: item.slug, quantity: qty, name: item.name, rarity: item.rarity });
+  }
+  return granted;
 }
 
 module.exports = { rollLoot, grantLoot };

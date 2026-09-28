@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { supabase } = require('../server');
 const { calculateDerived, applyLevelBonus } = require('../services/character');
+const equipment = require('../services/equipment');
 const { authenticateToken } = require('../services/auth');
 const {
   INITIAL_SKILLS_BY_CLASS,
@@ -323,10 +324,22 @@ router.post('/:characterId/enter', async (req, res) => {
     .select(`
       id, quantity, durability, is_equipped, equipped_slot, acquired_at,
       items (
-        name, item_type, description, weight, rarity, equipment_slot
+        slug, name, item_type, description, weight, rarity, equipment_slot,
+        is_equippable, is_stackable, stats, requirements, base_value
       )
     `)
     .eq('character_id', characterId);
+
+  // Camadas de derivado (Spec 3, Sub-parte D): equipamento SOMA aos derivados;
+  // sobrepeso PENALIZA. Calculadas on-the-fly (character_derived permanece
+  // base+nível). O cliente usa isso para mostrar a origem de cada ponto.
+  const inv = inventory || [];
+  const equippedItems = inv.filter((r) => r.is_equipped);
+  const derivedRow = Array.isArray(character.character_derived)
+    ? character.character_derived[0] : character.character_derived;
+  const carryCapacity = derivedRow?.carry_capacity || 0;
+  const equip = equipment.equipmentBonus(equippedItems);
+  const weight = equipment.weightPenalty(equipment.totalWeight(inv), carryCapacity);
 
   // Calcula fase do relógio corretamente
   let currentPhase = 'morning';
@@ -357,7 +370,10 @@ router.post('/:characterId/enter', async (req, res) => {
       currentPhase,
       secondsUntilNextPhase: Math.floor(secondsUntilNextPhase)
     },
-    inventory:     inventory || [],
+    inventory:     inv,
+    equipmentBonus: equip.totals,
+    equipmentBySource: equip.bySource,
+    weightPenalty: weight,
     onlinePlayers
   });
 });

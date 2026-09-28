@@ -92,7 +92,7 @@ exploração/informação estão registradas mas 🔮 inertes até os sistemas e
 
 | Nível | Nome | Tipo | Estado | Efeito |
 |:-----:|------|------|:------:|--------|
-| 1 | Granada Química | Ofensiva (CD 3) | ✅ | Dano em área `MP_INT × 2.5` + acúmulo de Exposição. (Custo de item 🔮 adiado.) |
+| 1 | Granada Química | Ofensiva (CD 3) | ✅ | Dano em área `MP_INT × 2.5`. Exige e consome `granada_quimica`. |
 | 1 | Armadilha de Pressão | Controle (CD 2) | ✅ | Dano `MP_INT × 3` + reduz Velocidade do alvo. |
 | 1 | Olhos de Engenheiro | Passiva | 🔮 | +Observação para mecanismos/dispositivos. |
 | 3 | Tiro de Precisão | Ofensiva (CD 4) | ✅ | Dano ×1.3 + efeito escolhido (aqui: derruba o alvo 1 turno). |
@@ -146,10 +146,10 @@ exploração/informação estão registradas mas 🔮 inertes até os sistemas e
 
 | Nível | Nome | Tipo | Estado | Efeito |
 |:-----:|------|------|:------:|--------|
-| 1 | Ataque Envenenado | Ofensiva (CD 3) | ✅ | Dano imediato + veneno `MP_INT × 1.5`/turno por 3 turnos. (Item 🔮 adiado.) |
-| 1 | Poção em Área | Suporte (CD 3) | ✅ | Cura em área; **sozinho, cura a si mesmo** (`MP_INT × 4`). (Item 🔮 adiado.) |
+| 1 | Ataque Envenenado | Ofensiva (CD 3) | ✅ | Dano imediato + veneno `MP_INT × 1.5`/turno por 3 turnos. Exige e consome `frasco_veneno`. |
+| 1 | Poção em Área | Suporte (CD 3) | ✅ | Cura em área; **sozinho, cura a si mesmo** (`MP_INT × 4`). Exige e consome `pocao_cura`. |
 | 1 | Mãos que Curam | Passiva | 🔮 | +40% de cura de poções/kits. |
-| 3 | Gás Paralisante | Ofensiva/Controle (CD 4) | ✅ | Dano `MP_INT × 2` + paralisa o alvo por 1 turno. |
+| 3 | Gás Paralisante | Ofensiva/Controle (CD 4) | ✅ | Dano `MP_INT × 2` + paralisa o alvo por 1 turno. Exige e consome `granada_gas`. |
 | 5 | Kit Avançado | Suporte | 🔮 | Cura maior + remove 2 debuffs de um aliado. |
 | 7 | Estimulante | Suporte/Utilidade | 🔮 | Buff temporário de atributos num aliado. |
 | 9 | Purificação Química | Suporte | 🔮 | Remove Exposição em área. |
@@ -235,7 +235,10 @@ Escala 1–5 entre as classes (referência de balanceamento do PDF).
 
 - **Stamina de combate** → substituída por **cooldown por Velocidade**.
 - Habilidades de **nível 4–10** e **ultimates** → 🔮 ainda não implementadas.
-- Habilidades que consomem item (Granada, Veneno, Poção) → hoje **sempre usáveis**
-  (custo de item adiado até o sistema de inventário de combate).
+- Habilidades que consomem item (Granada Química, Ataque Envenenado, Poção em Área,
+  Gás Paralisante) → **exigem e consomem** o item correspondente (`granada_quimica`,
+  `frasco_veneno`, `pocao_cura`, `granada_gas`). Sem o item no inventário, a
+  habilidade fica **indisponível** (desabilitada, com o motivo). Especificado em
+  `.kiro/specs/inventario/` (Sub-parte E).
 - Habilidades de suporte a aliado em 1x1: **Poção em Área** cura o self; as demais
   (Proteger, Análise de Campo em grupo) ficam inertes até haver party.

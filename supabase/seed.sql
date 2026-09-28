@@ -158,8 +158,8 @@ VALUES
   -- ── Arauto do Conclave ──────────────────────────────────────────────
   ('granada_quimica','arauto_conclave','Granada Química','offensive',1,'dispositivos_combate',1,
    3,false,false,'enemy',
-   '{"type":"scaled_attack","attr":"intellect","mult":2.5,"applies":[{"kind":"buff","name":"Exposição","mods":{},"turns":3}]}',
-   'Granada de dano em área com composto de névoa. (Custo de item adiado.)',20),
+   '{"type":"scaled_attack","attr":"intellect","mult":2.5,"req_item":"granada_quimica","applies":[{"kind":"buff","name":"Exposição","mods":{},"turns":3}]}',
+   'Granada de dano em área com composto de névoa. Exige e consome granada_quimica.',20),
   ('armadilha_pressao','arauto_conclave','Armadilha de Pressão','control',1,'engenharia',0,
    2,false,false,'enemy',
    '{"type":"scaled_attack","attr":"intellect","mult":3,"applies":[{"kind":"buff","name":"Lentidão","mods":{"speed":-5},"turns":2}]}',
@@ -186,16 +186,16 @@ VALUES
   -- ── Confessor do Véu ────────────────────────────────────────────────
   ('ataque_envenenado','confessor_veu','Ataque Envenenado','offensive',1,NULL,0,
    3,false,false,'enemy',
-   '{"type":"poison_attack","attr":"intellect","poisonMult":1.5,"turns":3}',
-   'Aplica veneno na arma: dano imediato + dano contínuo por 3 turnos. (Item adiado.)',40),
+   '{"type":"poison_attack","attr":"intellect","poisonMult":1.5,"turns":3,"req_item":"frasco_veneno"}',
+   'Aplica veneno na arma: dano imediato + dano contínuo por 3 turnos. Exige e consome frasco_veneno.',40),
   ('pocao_em_area','confessor_veu','Poção em Área','support',1,'medicina_combate',1,
    3,false,false,'self',
-   '{"type":"heal","attr":"intellect","mult":4}',
-   'Cura em área. Sozinho, cura a si mesmo. (Custo de item adiado.)',41),
+   '{"type":"heal","attr":"intellect","mult":4,"req_item":"pocao_cura"}',
+   'Cura em área. Sozinho, cura a si mesmo. Exige e consome pocao_cura.',41),
   ('gas_paralisante','confessor_veu','Gás Paralisante','control',3,NULL,0,
    4,false,false,'enemy',
-   '{"type":"attack_effect","damageMult":1.0,"attr":"intellect","attrMult":2,"status":{"kind":"stun","name":"Paralisado","turns":1}}',
-   'Composto que causa dano e paralisa o alvo por um turno.',42),
+   '{"type":"attack_effect","damageMult":1.0,"attr":"intellect","attrMult":2,"req_item":"granada_gas","status":{"kind":"stun","name":"Paralisado","turns":1}}',
+   'Composto que causa dano e paralisa o alvo por um turno. Exige e consome granada_gas.',42),
 
   -- ── Cronista das Ruínas ─────────────────────────────────────────────
   ('tiro_rapido','cronista_ruinas','Tiro Rápido','offensive',1,'armas_fogo_leves',1,
@@ -260,3 +260,159 @@ ON CONFLICT ("slug") DO UPDATE SET
   "effect"          = EXCLUDED."effect",
   "description"     = EXCLUDED."description",
   "sort_order"      = EXCLUDED."sort_order";
+
+-- ─── Spec 3 — Inventário: catálogo de itens iniciais (MVP) ────────────────
+-- Ver .kiro/specs/inventario/design.md §1.1. Apenas raridades common/uncommon.
+-- Convenções:
+--   stats (jsonb): bônus DIRETO a derivados (chaves = colunas de character_derived).
+--     Equipamento normal SÓ SOMA (nunca reduz; reduções são de itens Corrompidos 🔮).
+--   requirements (jsonb): { "str_mg": N } (Modificador Grande mínimo) e/ou
+--     { "skill": "<slug>", "level": N } (perícia mínima).
+--   is_stackable: consumíveis e recursos = true; equipáveis = false.
+--   equipment_slot p/ acessório = 'accessory' (a rota de equipar resolve
+--     accessory_1/accessory_2). Armas em 'main_hand'; escudo em 'off_hand'.
+--   base_value: valor base para economia futura (sem compra/venda agora).
+INSERT INTO "public"."items"
+  ("slug","name","item_type","description","is_equippable","equipment_slot",
+   "weight","stats","requirements","is_tradeable","rarity","base_value",
+   "is_stackable")
+VALUES
+  -- ── Armas brancas leves (AGI / armas_brancas_leves) ──────────────────
+  ('faca_enferrujada','Faca Enferrujada','weapon',
+   'Uma lâmina curta e gasta, mas ainda corta. O primeiro recurso de quem sai dos muros.',
+   true,'main_hand',0.6,
+   '{"attack_melee":3,"accuracy":1}','{}',true,'common',5,false),
+  ('adaga_afiada','Adaga Afiada','weapon',
+   'Bem cuidada e balanceada. Rápida nas mãos certas.',
+   true,'main_hand',0.7,
+   '{"attack_melee":5,"accuracy":2,"crit_chance":2}',
+   '{"skill":"armas_brancas_leves","level":1}',true,'uncommon',24,false),
+
+  -- ── Armas brancas pesadas (FOR / armas_brancas_pesadas) ──────────────
+  ('marreta_industrial','Marreta Industrial','weapon',
+   'Peso bruto de aço. Lenta, mas cada golpe conta.',
+   true,'main_hand',3.2,
+   '{"attack_melee":8}','{"str_mg":3,"skill":"armas_brancas_pesadas","level":1}',
+   true,'uncommon',30,false),
+
+  -- ── Armas de fogo leves (PER / armas_fogo_leves) ─────────────────────
+  ('pistola_ferrugem','Pistola Enferrujada','weapon',
+   'Revólver velho de tambor emperrado. Ainda dispara, na maioria das vezes.',
+   true,'main_hand',1.1,
+   '{"attack_ranged":4,"accuracy":1}','{}',true,'common',8,false),
+  ('revolver_guarda','Revólver da Guarda','weapon',
+   'Arma padrão da Guarda de Ironfall. Confiável e precisa.',
+   true,'main_hand',1.2,
+   '{"attack_ranged":6,"accuracy":3}','{"skill":"armas_fogo_leves","level":1}',
+   true,'uncommon',28,false),
+
+  -- ── Armaduras leves (AGI / armaduras_leves) por slot ─────────────────
+  ('capuz_couro','Capuz de Couro','armor',
+   'Couro tratado que cobre a cabeça. Proteção modesta, pouco peso.',
+   true,'head',0.5,
+   '{"defense":1}','{}',true,'common',6,false),
+  ('colete_couro','Colete de Couro','armor',
+   'Peitoral de couro reforçado. Básico, mas segura um golpe.',
+   true,'chest',2.0,
+   '{"defense":2,"hp_max":3}','{}',true,'common',12,false),
+  ('luvas_couro','Luvas de Couro','armor',
+   'Protegem as mãos sem atrapalhar o punho.',
+   true,'hands',0.3,
+   '{"defense":1}','{}',true,'common',5,false),
+  ('calcas_reforcadas','Calças Reforçadas','armor',
+   'Tecido grosso com placas de couro nas coxas.',
+   true,'legs',1.0,
+   '{"defense":1}','{}',true,'common',7,false),
+  ('colete_malha','Colete de Malha','armor',
+   'Malha metálica leve sob o tecido. Boa defesa sem travar o movimento.',
+   true,'chest',3.5,
+   '{"defense":4,"hp_max":6}','{"skill":"armaduras_leves","level":1}',
+   true,'uncommon',34,false),
+
+  -- ── Armaduras pesadas (RES / armaduras_pesadas) ──────────────────────
+  ('peitoral_placas','Peitoral de Placas','armor',
+   'Placas industriais rebitadas. Muita defesa, muito peso.',
+   true,'chest',9.0,
+   '{"defense":7,"hp_max":10}','{"str_mg":3,"skill":"armaduras_pesadas","level":1}',
+   true,'uncommon',48,false),
+
+  -- ── Escudo (off_hand / escudos_bloqueio) ─────────────────────────────
+  ('escudo_madeira','Escudo de Madeira','armor',
+   'Tábuas reforçadas com um aro de ferro. Melhora o bloqueio.',
+   true,'off_hand',2.5,
+   '{"defense":2}','{}',true,'common',10,false),
+
+  -- ── Acessórios ───────────────────────────────────────────────────────
+  ('amuleto_osso','Amuleto de Osso','armor',
+   'Talismã tosco que dizem afastar a névoa. Talvez seja só superstição.',
+   true,'accessory',0.2,
+   '{"mist_resistance":3}','{}',true,'common',9,false),
+  ('anel_precisao','Anel de Precisão','armor',
+   'Anel de artesão que firma a mira.',
+   true,'accessory',0.1,
+   '{"accuracy":2,"crit_chance":1}','{}',true,'uncommon',22,false),
+
+  -- ── Consumíveis (usados fora e dentro do combate) ────────────────────
+  ('pocao_cura','Poção de Cura','consumable',
+   'Elixir vermelho que fecha ferimentos. Restaura PV.',
+   false,NULL,0.3,
+   '{"heal":30}','{}',true,'common',10,true),
+  ('frasco_veneno','Frasco de Veneno','consumable',
+   'Composto corrosivo para untar a lâmina. Consumido pela habilidade Ataque Envenenado.',
+   false,NULL,0.2,
+   '{}','{}',true,'common',8,true),
+  ('granada_quimica','Granada Química','consumable',
+   'Cápsula instável de névoa comprimida. Consumida pela habilidade Granada Química.',
+   false,NULL,0.5,
+   '{}','{}',true,'uncommon',18,true),
+  ('granada_gas','Granada de Gás','consumable',
+   'Dispersa um gás paralisante. Consumida pela habilidade Gás Paralisante.',
+   false,NULL,0.5,
+   '{}','{}',true,'uncommon',20,true),
+
+  -- ── Recursos (drop de loot; matéria-prima para produção futura) ──────
+  ('sucata_metal','Sucata de Metal','resource',
+   'Fragmentos de metal enferrujado. Úteis para reparos e fabricação.',
+   false,NULL,0.4,
+   '{}','{}',true,'common',2,true),
+  ('essencia_nevoa','Essência de Névoa','resource',
+   'Um resíduo brilhante e frio deixado por criaturas corrompidas.',
+   false,NULL,0.1,
+   '{}','{}',true,'uncommon',14,true)
+ON CONFLICT ("slug") DO UPDATE SET
+  "name"          = EXCLUDED."name",
+  "item_type"     = EXCLUDED."item_type",
+  "description"   = EXCLUDED."description",
+  "is_equippable" = EXCLUDED."is_equippable",
+  "equipment_slot"= EXCLUDED."equipment_slot",
+  "weight"        = EXCLUDED."weight",
+  "stats"         = EXCLUDED."stats",
+  "requirements"  = EXCLUDED."requirements",
+  "is_tradeable"  = EXCLUDED."is_tradeable",
+  "rarity"        = EXCLUDED."rarity",
+  "base_value"    = EXCLUDED."base_value",
+  "is_stackable"  = EXCLUDED."is_stackable";
+
+-- ─── Spec 3 — Inventário: loot_table dos inimigos iniciais ────────────────
+-- Ver .kiro/specs/inventario/design.md §1.3 / §3.2. Formato consumido por
+-- services/loot.js: [{ "item_slug", "chance"(0..1), "min", "max" }].
+-- Slugs referenciam itens semeados acima. Drops modestos (MVP): recursos comuns,
+-- consumíveis ocasionais, equipamento comum raro de cair.
+UPDATE "public"."enemy_catalog" SET "loot_table" = '[
+  {"item_slug":"sucata_metal","chance":0.5,"min":1,"max":2},
+  {"item_slug":"pocao_cura","chance":0.15,"min":1,"max":1}
+]'::jsonb WHERE "slug" = 'rato_da_bruma';
+
+UPDATE "public"."enemy_catalog" SET "loot_table" = '[
+  {"item_slug":"sucata_metal","chance":0.5,"min":1,"max":2},
+  {"item_slug":"essencia_nevoa","chance":0.35,"min":1,"max":1},
+  {"item_slug":"frasco_veneno","chance":0.2,"min":1,"max":1},
+  {"item_slug":"faca_enferrujada","chance":0.08,"min":1,"max":1}
+]'::jsonb WHERE "slug" = 'vagante_corrompido';
+
+UPDATE "public"."enemy_catalog" SET "loot_table" = '[
+  {"item_slug":"sucata_metal","chance":0.7,"min":2,"max":4},
+  {"item_slug":"essencia_nevoa","chance":0.4,"min":1,"max":2},
+  {"item_slug":"granada_quimica","chance":0.15,"min":1,"max":1},
+  {"item_slug":"escudo_madeira","chance":0.1,"min":1,"max":1}
+]'::jsonb WHERE "slug" = 'sabujo_de_ferro';

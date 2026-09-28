@@ -149,3 +149,4 @@
 }
 .btn-ability:disabled { opacity: 0.4; cursor: not-allowed; }
 .ability-cd { color: var(--color-text-dim); }
+.ability-item { color: var(--color-gold); font-size: 11px; }

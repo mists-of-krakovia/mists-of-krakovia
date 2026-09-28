@@ -15,8 +15,10 @@ Combate, Exploração, Economia, Profissões, MVP Scope, ADR.
 **Objetivo:** validar se explorar a Névoa é divertido.
 **Escopo:** Login ✅, Cadastro ✅, 1 personagem ✅ (na verdade 5 slots), cidade
 inicial ✅ (Ironfall, em vez de Novaya Veles), 1 zona explorável 🔄, sistema de
-exploração 🔮, **sistema de combate ✅**, sistema de inventário 🔄 (leitura), 10–15
-criaturas 🔄 (3 iniciais até agora), 20–30 itens 🔮, 5 NPCs 🔮, 10 missões 🔮.
+exploração 🔮, **sistema de combate ✅**, sistema de inventário 🔄 (leitura pronta;
+loot real + ações + equipamento em spec — `.kiro/specs/inventario/`), 10–15
+criaturas 🔄 (3 iniciais até agora), 20–30 itens 🔄 (spec de inventário; MVP com
+raridades comum/incomum), 5 NPCs 🔮, 10 missões 🔮.
 **Sem:** guildas, PvP, crafting avançado, facções jogáveis.
 **Meta de saída:** primeiro gameplay funcional.
 > Estado: combate por turnos + progressão + perícias funcionais. Faltam

@@ -51,7 +51,7 @@ Explorar novamente.
 | Combate por turnos | ✅ |
 | Progressão (nível/XP/perícias) | ✅ |
 | Exploração (buscar/coletar) | 🔮 |
-| Inventário | 🔄 (leitura; ações 🔮) |
+| Inventário / Itens | 🔄 (leitura pronta; loot real, ações e equipamento em spec — `.kiro/specs/inventario/`) |
 | Conhecimento / Documentos | 🔮 |
 | Confiança de NPC / Diálogo | 🔮 (conflito de design a resolver — ver Volume IV) |
 

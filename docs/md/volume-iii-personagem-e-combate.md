@@ -102,6 +102,29 @@ Notas:
   guardado separado da fórmula e somado por cima; o jogador vê só o total.
 - **Dano Crítico:** começa em 150% e cresce com Força (C.C.) ou Percepção (dist.).
 - **Velocidade:** define iniciativa e frequência de ações (ver ações adicionais).
+- **Bônus de equipamento:** os itens equipados somam aos derivados (Ataque, Defesa,
+  Acerto, Velocidade, Evasão, etc.). Equipamento normal **só soma, nunca reduz**. A
+  camada de equipamento é calculada por cima da base (atributos) + bônus de nível,
+  mantida separada para que a **origem de cada ponto** seja legível (base / nível /
+  equipamento) tanto para o sistema quanto para o jogador. Ver spec
+  `.kiro/specs/inventario/`.
+- **Sobrepeso:** carregar acima da Capacidade de Carga aplica **penalidade pesada**
+  (forte redução de Velocidade/Evasão e, em excesso alto, bloqueio de ações de
+  mobilidade). Também é uma camada, com origem "sobrepeso".
+
+### Mutação 🔮 (planejado — camadas avançadas)
+
+**Mutação** (0–100) é o quanto a Névoa já alterou o corpo e a mente do personagem.
+É uma stat séria de build/gameplay para o futuro: sobe ao equipar **itens
+Corrompidos** e (ver Parte VIII) por exposição prolongada à Névoa; Mutação alta
+traz penalidades e efeitos degradantes.
+
+- **Itens Corrompidos** 🔮 — eixo transversal: qualquer item (arma ou armadura, em
+  qualquer slot) pode ser Corrompido. São **muito mais fortes** que o equivalente
+  normal, mas trazem **penalidades pesadas** (redução de atributo/derivado ou efeito
+  degradante) e **aumentam a Mutação** enquanto equipados. Conteúdo de camadas
+  avançadas do jogo — **não implementado** (o schema reserva as colunas inertes
+  `is_corrupted`/`corruption`; a stat de Mutação ainda não existe no MVP).
 
 ---
 

@@ -36,9 +36,11 @@ const characterRoutes = require('./routes/characters');
 const worldRoutes = require('./routes/world');
 const skillRoutes = require('./routes/skills');
 const combatRoutes = require('./routes/combat');
+const inventoryRoutes = require('./routes/inventory');
 
 app.use('/auth', authRoutes);
 app.use('/characters', characterRoutes);
+app.use('/characters', inventoryRoutes);
 app.use('/world', worldRoutes);
 app.use('/skills', skillRoutes);
 app.use('/combat', combatRoutes);
