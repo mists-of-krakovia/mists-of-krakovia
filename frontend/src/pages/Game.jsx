@@ -95,9 +95,10 @@ function PanelLeft({ character, currentPage, onNavigate, onLogout }) {
     { id: 'world',     label: 'Mundo'      },
     { id: 'character', label: 'Personagem' },
     { id: 'inventory', label: 'Inventário' },
+    { id: 'skills',    label: 'Perícias'   },
+    { id: 'abilities', label: 'Habilidades'},
     { id: 'quests',    label: 'Missões'    },
     { id: 'documents', label: 'Documentos' },
-    { id: 'skills',    label: 'Perícias'   },
   ];
 
   return (
@@ -639,6 +640,92 @@ function PageSkills({ character, catalog, onAllocated }) {
           <button className="btn-primary" onClick={confirm} disabled={saving}>
             {saving ? 'Salvando...' : 'Confirmar distribuição'}
           </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Página: Habilidades ─────────────────────────────────────────────
+const ABILITY_KIND_LABEL = {
+  offensive: 'Ofensiva', control: 'Controle', support: 'Suporte',
+  mobility: 'Mobilidade', reactive: 'Reativa', passive: 'Passiva',
+};
+
+function AbilityCard({ ab }) {
+  const tags = [];
+  tags.push(ABILITY_KIND_LABEL[ab.kind] || ab.kind);
+  if (ab.is_ultimate) tags.push('Ultimate');
+  if (ab.is_passive) tags.push('Passiva');
+  else if (ab.cooldown_base > 0) tags.push(`Recarga ${ab.cooldown_base}`);
+
+  return (
+    <div className={`ability-card ${ab.unlocked ? 'unlocked' : 'locked'}`}>
+      <div className="ability-card-head">
+        <span className="ability-name">{ab.name}</span>
+        <span className="ability-lv text-dim">Nv {ab.unlock_level}</span>
+      </div>
+      <div className="ability-tags text-dim">{tags.join(' · ')}</div>
+      {ab.description && <div className="ability-desc text-dim font-narrative">{ab.description}</div>}
+      {!ab.unlocked && ab.reasons?.length > 0 && (
+        <div className="ability-req text-danger">{ab.reasons.join(' ')}</div>
+      )}
+    </div>
+  );
+}
+
+function PageAbilities({ characterId, level }) {
+  const [data, setData]     = useState(null);
+  const [error, setError]   = useState('');
+
+  const load = useCallback(async () => {
+    if (!characterId) return;
+    try {
+      const { data: d } = await characterService.abilities(characterId);
+      setData(d);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Erro ao carregar habilidades.');
+    }
+  }, [characterId]);
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { void load(); }, [load]);
+
+  if (error) return (
+    <div className="page-content"><p className="text-danger">{error}</p></div>
+  );
+  if (!data) return (
+    <div className="page-content"><p className="text-dim">Carregando habilidades...</p></div>
+  );
+
+  const list = data.abilities || [];
+  const unlocked = list.filter((a) => a.unlocked);
+  const future   = list.filter((a) => !a.unlocked);
+
+  return (
+    <div className="page-content">
+      <div className="page-header">
+        <h2 className="page-title text-gold">Habilidades</h2>
+        <p className="page-subtitle text-dim">
+          {CLASS_LABELS[data.class]} · Nível {level ?? data.level} ·
+          {' '}{data.counts.unlocked}/{data.counts.total} desbloqueadas
+        </p>
+      </div>
+
+      <div className="char-page-section">
+        <div className="section-label text-dim">Desbloqueadas ({unlocked.length})</div>
+        {unlocked.length === 0
+          ? <p className="text-dim font-narrative" style={{ fontSize: 13, fontStyle: 'italic' }}>
+              Nenhuma habilidade ativa ainda. Suba de nível e treine as perícias exigidas.
+            </p>
+          : <div className="ability-grid">{unlocked.map((a) => <AbilityCard key={a.slug} ab={a} />)}</div>
+        }
+      </div>
+
+      {future.length > 0 && (
+        <div className="char-page-section">
+          <div className="section-label text-dim">A desbloquear ({future.length})</div>
+          <div className="ability-grid">{future.map((a) => <AbilityCard key={a.slug} ab={a} />)}</div>
         </div>
       )}
     </div>
@@ -1302,6 +1389,8 @@ export default function Game() {
           catalog={skillCatalog}
           onAllocated={handleAllocateSkills}
         />;
+      case 'abilities':
+        return <PageAbilities characterId={char?.id} level={char?.level} />;
       default:
         return <PageWorld node={gameState.node} clock={gameState.clock} />;
     }

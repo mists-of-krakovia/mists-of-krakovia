@@ -311,6 +311,23 @@
 .shop-item-price { font-size: 12px; }
 .shop-msg { font-size: 12px; margin-top: 6px; font-style: italic; }
 
+/* ── Habilidades ── */
+.ability-grid { display: flex; flex-direction: column; gap: 8px; }
+.ability-card {
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 10px 12px;
+  background: rgba(0,0,0,0.12);
+}
+.ability-card.unlocked { border-color: var(--color-border-gold); }
+.ability-card.locked   { opacity: 0.6; }
+.ability-card-head { display: flex; justify-content: space-between; align-items: baseline; }
+.ability-name { font-weight: 500; font-size: 14px; }
+.ability-lv   { font-size: 11px; }
+.ability-tags { font-size: 11px; margin-top: 2px; }
+.ability-desc { font-size: 12px; line-height: 1.5; margin-top: 6px; }
+.ability-req  { font-size: 11px; margin-top: 6px; }
+
 .exit-item {
   display: flex;
   align-items: center;

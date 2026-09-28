@@ -60,8 +60,10 @@ e XP/Nível. ✅
   os derivados. Distribuição interativa dos pontos disponíveis. ✅
 - **Perícias** — abas Campo e Combate; nível (0–10), atributo base, requisitos;
   pontos disponíveis; distribuição interativa. ✅
-- **Habilidades** 🔮 — lista de habilidades de classe (passivas/ativas). Ainda não
-  há página dedicada; as habilidades aparecem no painel de combate.
+- **Habilidades** ✅ — página dedicada que lista as habilidades de classe: as já
+  **desbloqueadas** e as **futuras** (com o requisito de nível/perícia e o motivo do
+  bloqueio), marcando ativas/passivas/ultimate e a recarga. As habilidades também
+  continuam aparecendo no painel de combate para uso.
 - **Inventário** ✅ leitura (grade de itens + **9 slots** de equipamento: cabeça,
   tórax, mãos, pernas, arma principal, arma secundária, 2 acessórios + peso/carga).
   🔄 Ações (Equipar/Desequipar/Usar/Descartar), loot real e equipamento afetando os

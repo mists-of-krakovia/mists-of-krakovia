@@ -66,7 +66,11 @@ export const characterService = {
   // Explorar área: procura uma passagem secreta no nó atual (chance por
   // Percepção + perícia Investigação).
   explore: (characterId) =>
-    api.post(`/characters/${characterId}/explore`)
+    api.post(`/characters/${characterId}/explore`),
+
+  // Habilidades de classe do personagem (desbloqueadas + futuras).
+  abilities: (characterId) =>
+    api.get(`/characters/${characterId}/abilities`)
 };
 
 // Perícias

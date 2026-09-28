@@ -41,6 +41,62 @@ router.get('/', async (req, res) => {
   res.json(data);
 });
 
+// GET /characters/:characterId/abilities
+// Lista as habilidades de CLASSE do personagem (abilities_catalog), marcando quais
+// já estão desbloqueadas e quais são futuras, com os requisitos (nível/perícia).
+// Para o painel "Habilidades" (jogador vê o que tem e o que vai ter).
+router.get('/:characterId/abilities', async (req, res) => {
+  try {
+    const { characterId } = req.params;
+    const { data: character } = await supabase
+      .from('characters')
+      .select('id, class, level, character_skills (skill_name, level)')
+      .eq('id', characterId).eq('account_id', req.userId).maybeSingle();
+    if (!character) return res.status(404).json({ error: 'Personagem não encontrado.' });
+
+    const skillLevels = {};
+    for (const s of character.character_skills || []) skillLevels[s.skill_name] = s.level;
+
+    const { data: catalog } = await supabase
+      .from('abilities_catalog').select('*')
+      .eq('class_key', character.class)
+      .order('unlock_level', { ascending: true }).order('sort_order', { ascending: true });
+
+    const abilities = (catalog || []).map((ab) => {
+      const reasons = [];
+      const levelOk = character.level >= ab.unlock_level;
+      if (!levelOk) reasons.push(`Requer nível ${ab.unlock_level}.`);
+      let skillOk = true;
+      if (ab.req_skill) {
+        const have = skillLevels[ab.req_skill] || 0;
+        skillOk = have >= (ab.req_skill_level || 0);
+        if (!skillOk) reasons.push(`Requer perícia ${ab.req_skill} nível ${ab.req_skill_level}.`);
+      }
+      const unlocked = levelOk && skillOk;
+      return {
+        slug: ab.slug, name: ab.name, kind: ab.kind, description: ab.description,
+        unlock_level: ab.unlock_level, req_skill: ab.req_skill || null,
+        req_skill_level: ab.req_skill_level || 0,
+        cooldown_base: ab.cooldown_base, is_passive: ab.is_passive, is_ultimate: ab.is_ultimate,
+        target: ab.target,
+        unlocked, reasons,
+      };
+    });
+
+    res.json({
+      class: character.class, level: character.level,
+      abilities,
+      counts: {
+        total: abilities.length,
+        unlocked: abilities.filter((a) => a.unlocked).length,
+      },
+    });
+  } catch (err) {
+    console.error('[abilities] EXCEPTION:', err && err.message);
+    res.status(500).json({ error: 'Erro ao carregar habilidades.' });
+  }
+});
+
 // DELETE /characters/:characterId
 // Exclui um personagem do jogador. Limpa defensivamente as tabelas cujas FKs podem
 // não ter ON DELETE CASCADE garantido (combate/exploração), depois deleta o
