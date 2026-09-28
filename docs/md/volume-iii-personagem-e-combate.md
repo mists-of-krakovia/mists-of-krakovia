@@ -162,7 +162,7 @@ Perícias são treinamento específico, nível 0–10. Dividem-se em **Campo** e
 | Sobrevivência | RES | Forragear, acampar na névoa, rastrear, navegar. | 3+: reduz exaustão; 5+: lê criaturas; 7+: rotas alternativas |
 | Furtividade | AGI | Movimento sem detecção; ataques furtivos aumentam dano. | 4+: silêncio na névoa; 6+: cobertura por névoa; 9+: burla sensores |
 | Negociação | PER | Persuasão, intimidação, barganha, leitura de intenções. | 3+: detecta contradições; 5+: missões exclusivas; 8+: negocia com Herdeiros |
-| Investigação | PER | Pistas ocultas, documentos, armadilhas, reconstrução. | 4+: data objetos; 7+: reconstrói eventos |
+| Investigação | PER | Pistas ocultas, documentos, armadilhas, reconstrução. **Descobre passagens secretas** ao Explorar área (ver Volume IV). | 4+: data objetos; 7+: reconstrói eventos |
 | Religião | SAN | Doutrinas da Igreja do Véu Prateado; rituais de purificação. | 3+: reduz Exposição; 6+: identifica Herdeiros; 9+: arquivo pré-Cataclisma |
 | Destreza Manual | AGI | Fechaduras, desarmar armadilhas, cofres, próteses em campo. | 4+: segurança krakoviana; 7+: armadilhas de Ætherium |
 | Arqueologia | PER | Artefatos e ruínas pré-Cataclisma. | 3+: facção de origem; 5+: passagens ocultas; 8+: inscrições destruídas |

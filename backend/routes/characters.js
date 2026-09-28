@@ -640,6 +640,96 @@ router.post('/:characterId/save-point', async (req, res) => {
   }
 });
 
+// POST /characters/:characterId/explore
+// Ação de campo "Explorar área": procura uma PASSAGEM SECRETA no nó atual (se
+// houver alguma ainda não descoberta por este personagem). A chance é governada
+// pela Percepção (atributo) e, principalmente, pela perícia Investigação (detecção
+// ativa) — quanto maior o nível, mais fácil. Não inicia combate.
+//   chance = clamp(MP_PER*1.5% + nivelInvestigacao*8%, 5%, 90%)
+// Ao encontrar: registra a conexão secreta em character_discovered_nodes (o /enter
+// já revela conexões descobertas), então a saída secreta passa a aparecer.
+const EXPLORE_PER_PER_PCT = 0.015;   // por ponto de Percepção
+const EXPLORE_SKILL_PER_LVL = 0.08;  // por nível de Investigação (domina)
+const EXPLORE_MIN = 0.05, EXPLORE_MAX = 0.90;
+router.post('/:characterId/explore', async (req, res) => {
+  try {
+    const { characterId } = req.params;
+
+    const { data: character } = await supabase
+      .from('characters')
+      .select('id, current_node_id, character_attributes (perception), character_skills (skill_name, level)')
+      .eq('id', characterId)
+      .eq('account_id', req.userId)
+      .single();
+    if (!character) return res.status(404).json({ error: 'Personagem não encontrado.' });
+
+    const nodeId = character.current_node_id;
+    if (!nodeId) return res.status(400).json({ error: 'Personagem não está em um nó.' });
+
+    // Nó atual precisa ser explorável (não faz sentido em zona segura).
+    const { data: node } = await supabase
+      .from('world_nodes').select('id, is_safe_zone').eq('id', nodeId).single();
+    if (!node || node.is_safe_zone) {
+      return res.status(400).json({ error: 'Não há o que explorar aqui.' });
+    }
+
+    // Conexões secretas saindo deste nó (is_visible = false), para nós is_secret.
+    const { data: secretConns } = await supabase
+      .from('node_connections')
+      .select('to_node_id, direction_label, world_nodes!node_connections_to_node_id_fkey (name, is_secret)')
+      .eq('from_node_id', nodeId)
+      .eq('is_visible', false);
+
+    // Filtra as que levam a nós secretos e que o personagem AINDA não descobriu.
+    const { data: discovered } = await supabase
+      .from('character_discovered_nodes')
+      .select('node_id')
+      .eq('character_id', characterId);
+    const discoveredIds = new Set((discovered || []).map((d) => d.node_id));
+
+    const undiscoveredSecrets = (secretConns || []).filter(
+      (c) => c.world_nodes && c.world_nodes.is_secret && !discoveredIds.has(c.to_node_id)
+    );
+
+    // Rola a chance independentemente (para não vazar se há segredo ou não pela
+    // resposta): sempre "gasta" a busca. Se não há segredo, o resultado é "nada".
+    const attrs = Array.isArray(character.character_attributes)
+      ? character.character_attributes[0] : character.character_attributes;
+    const perception = attrs?.perception ?? 5;
+    const invSkill = (character.character_skills || []).find((s) => s.skill_name === 'investigacao');
+    const invLevel = invSkill ? invSkill.level : 0;
+
+    const chance = Math.max(EXPLORE_MIN, Math.min(EXPLORE_MAX,
+      perception * EXPLORE_PER_PER_PCT + invLevel * EXPLORE_SKILL_PER_LVL));
+
+    if (undiscoveredSecrets.length === 0) {
+      return res.json({ ok: true, found: false, chance,
+        message: 'Você vasculha o local, mas não encontra nada de especial.' });
+    }
+
+    const roll = Math.random();
+    if (roll >= chance) {
+      return res.json({ ok: true, found: false, chance,
+        message: 'Você sente que há algo escondido aqui, mas não consegue encontrar. Talvez com mais atenção.' });
+    }
+
+    // Sucesso: descobre a PRIMEIRA passagem secreta ainda oculta deste nó.
+    const target = undiscoveredSecrets[0];
+    await supabase.from('character_discovered_nodes').insert({
+      character_id: characterId, node_id: target.to_node_id, discovered_at: new Date().toISOString(),
+    });
+
+    res.json({
+      ok: true, found: true, chance,
+      discoveredNodeName: target.world_nodes.name,
+      message: `Você encontra uma passagem escondida: ${target.world_nodes.name}!`,
+    });
+  } catch (err) {
+    console.error('[explore] EXCEPTION:', err && err.message);
+    res.status(500).json({ error: 'Erro ao explorar a área.' });
+  }
+});
+
 // POST /characters/:characterId/move
 // Bug 2 corrigido — busca stamina separadamente para evitar
 // problema de estrutura objeto vs array na relação do Supabase

@@ -107,9 +107,14 @@ Legenda: **tipo** · **safe** · **enc** = encounter_rate · **secret**.
 | `burnt_tower` 🔒 | Torre Queimada | secret | true | Ferro-Velho | (definir depois) |
 | `fenda_reator` | Fenda do Reator | secret | true | Trilha da Contenção | (definir depois) |
 
-> `unlock_condition` fica **em branco** por ora — você disse que definirá as
-> condições depois. A conexão para o nó secreto entra com `is_visible = false` (o
-> jogador não vê a saída até descobrir), e o nó tem `is_secret = true`.
+> **Descoberta (implementado):** a passagem secreta é revelada pela ação **Explorar
+> área** no nó que a esconde. A chance é governada pela **Percepção** e, sobretudo,
+> pela perícia **Investigação** (`clamp(MP_PER×1.5% + nível_Investigação×8%, 5%,
+> 90%)`). Ao encontrar, a saída passa a aparecer para aquele personagem
+> (`character_discovered_nodes`). `unlock_condition` permanece em branco — a
+> descoberta hoje é por exploração; condições extras (itens/quests) podem ser
+> somadas depois. A conexão entra com `is_visible = false` e o nó tem
+> `is_secret = true`.
 > Observação: hoje as 2 secretas existentes penduram numa cadeia (Torre→Gruta). No
 > novo desenho cada secreta pende de um **nó de exploração distinto** (mais coerente
 > com "passagens escondidas em 3 nós"). O seed vai **reconfigurar** as conexões

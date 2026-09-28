@@ -78,7 +78,9 @@ e XP/Nível. ✅
 
 ### Painel direito — Interação
 - Seções: NPCs presentes, Saídas (com custo de estamina), Ações de campo. ✅
-- **Ações de campo:** **Caçar** ✅ (inicia combate). 🔮 Explorar/Buscar/Coletar
+- **Ações de campo:** **Caçar** ✅ (inicia combate). **Explorar área** ✅ (procura
+  passagens secretas no nó — chance por Percepção + perícia Investigação, com a
+  perícia dominando; ao achar, a saída secreta passa a aparecer). 🔮 Coletar
   (desabilitados por ora). Em assentamentos: **Salvar progresso** ✅ (ponto de
   respawn).
 - **Online:** jogadores presentes no nó (presença por heartbeat). ✅

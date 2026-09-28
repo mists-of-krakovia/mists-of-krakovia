@@ -58,7 +58,12 @@ export const characterService = {
 
   // Salva o nó atual como ponto de respawn (só em settlement).
   savePoint: (characterId) =>
-    api.post(`/characters/${characterId}/save-point`)
+    api.post(`/characters/${characterId}/save-point`),
+
+  // Explorar área: procura uma passagem secreta no nó atual (chance por
+  // Percepção + perícia Investigação).
+  explore: (characterId) =>
+    api.post(`/characters/${characterId}/explore`)
 };
 
 // Perícias

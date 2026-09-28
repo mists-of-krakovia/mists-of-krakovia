@@ -656,7 +656,7 @@ function PageUnderConstruction({ label }) {
 
 // ─── Painel direito ──────────────────────────────────────────────────
 // onMove vem do componente principal onde character e setGameState existem
-function PanelRight({ node, connections, npcs, activeQuests, onlinePlayers, onMove, onHunt, hunting, onSave, saving }) {
+function PanelRight({ node, connections, npcs, activeQuests, onlinePlayers, onMove, onHunt, hunting, onSave, saving, onExplore, exploring }) {
   const [activeTab, setActiveTab] = useState('world');
 
   const safeNpcs          = npcs          || [];
@@ -742,8 +742,11 @@ function PanelRight({ node, connections, npcs, activeQuests, onlinePlayers, onMo
           {!node?.is_safe_zone && (
             <div className="interaction-section">
               <div className="section-label text-dim">Ações de campo</div>
-              <button className="btn-field" disabled title="Em breve">Explorar área</button>
-              <button className="btn-field" onClick={onHunt} disabled={hunting}>
+              <button className="btn-field" onClick={onExplore} disabled={exploring || hunting}
+                title="Procurar passagens escondidas (Percepção + Investigação)">
+                {exploring ? 'Explorando...' : 'Explorar área'}
+              </button>
+              <button className="btn-field" onClick={onHunt} disabled={hunting || exploring}>
                 {hunting ? 'Procurando...' : 'Caçar'}
               </button>
               <button className="btn-field" disabled title="Em breve">Coletar recursos</button>
@@ -886,6 +889,7 @@ export default function Game() {
   const [combatState, setCombatState]     = useState(null); // estado da sessão de combate ativa
   const [hunting, setHunting]             = useState(false);
   const [saving, setSaving]               = useState(false);
+  const [exploring, setExploring]         = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -990,6 +994,25 @@ export default function Game() {
       await loadGameState();
     } catch (err) {
       alert(err.response?.data?.error || 'Não foi possível concluir a ação.');
+    }
+  }
+
+  // Explorar área: procura passagem secreta no nó atual. Se encontrar, recarrega
+  // o estado (a saída secreta passa a aparecer nas conexões).
+  async function handleExplore() {
+    if (exploring || hunting || combatState) return;
+    setExploring(true);
+    try {
+      const { data } = await characterService.explore(character.id);
+      alert(data.message || (data.found ? 'Você encontrou uma passagem!' : 'Nada encontrado.'));
+      if (data.found) {
+        await loadGameState();
+        setNarrationSeed(Math.floor(Math.random() * 1000));
+      }
+    } catch (err) {
+      alert(err.response?.data?.error || 'Não foi possível explorar aqui.');
+    } finally {
+      setExploring(false);
     }
   }
 
@@ -1121,6 +1144,8 @@ export default function Game() {
         hunting={hunting}
         onSave={handleSavePoint}
         saving={saving}
+        onExplore={handleExplore}
+        exploring={exploring}
       />
 
       {combatState && (
