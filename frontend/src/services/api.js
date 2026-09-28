@@ -72,6 +72,13 @@ export const skillService = {
     api.get('/skills/catalog')
 };
 
+// NPCs / Diálogo
+export const npcService = {
+  // Conversa: o jogador digita e o NPC responde (motor de palavras-chave).
+  talk: (npcId, characterId, text, locale = 'pt') =>
+    api.post(`/npcs/${npcId}/talk`, { characterId, text, locale })
+};
+
 // Inventário (ações fora de combate)
 export const inventoryService = {
   equip: (characterId, inventoryId) =>

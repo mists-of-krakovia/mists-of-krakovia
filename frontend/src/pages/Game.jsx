@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGame } from '../context/GameContext';
-import { characterService, skillService, combatService, inventoryService } from '../services/api';
+import { characterService, skillService, combatService, inventoryService, npcService } from '../services/api';
 import Combat from './Combat';
 import './Game.css';
 
@@ -654,10 +654,79 @@ function PageUnderConstruction({ label }) {
   );
 }
 
+// ─── Conversa com NPC (digitação) ────────────────────────────────────
+function NpcChat({ npc, characterId, onClose }) {
+  const [history, setHistory] = useState([]); // { who: 'player'|'npc', text }
+  const [input, setInput]     = useState('');
+  const [busy, setBusy]       = useState(false);
+  const endRef = useRef(null);
+
+  useEffect(() => {
+    if (endRef.current) endRef.current.scrollIntoView({ behavior: 'smooth' });
+  }, [history]);
+
+  async function send() {
+    const text = input.trim();
+    if (!text || busy) return;
+    setBusy(true);
+    setHistory((h) => [...h, { who: 'player', text }]);
+    setInput('');
+    try {
+      const { data } = await npcService.talk(npc.id, characterId, text);
+      setHistory((h) => [...h, { who: 'npc', text: data.reply }]);
+    } catch (err) {
+      setHistory((h) => [...h, { who: 'npc', text: err.response?.data?.error || '...' }]);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function onKeyDown(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+  }
+
+  return (
+    <div className="interaction-section npc-chat">
+      <div className="npc-chat-header">
+        <span className="text-gold">{npc.name}</span>
+        <button className="npc-chat-close" onClick={onClose} title="Encerrar conversa">×</button>
+      </div>
+      <div className="npc-chat-log">
+        {history.length === 0 && (
+          <p className="text-dim font-narrative" style={{ fontSize: 13, fontStyle: 'italic' }}>
+            {npc.name} aguarda você dizer algo. (Digite e pressione Enter.)
+          </p>
+        )}
+        {history.map((line, i) => (
+          <p key={i} className={`npc-chat-line ${line.who === 'player' ? 'from-player' : 'from-npc'}`}>
+            {line.text}
+          </p>
+        ))}
+        <div ref={endRef} />
+      </div>
+      <div className="npc-chat-input">
+        <input
+          type="text"
+          value={input}
+          maxLength={300}
+          placeholder="Diga algo..."
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={onKeyDown}
+          disabled={busy}
+        />
+        <button className="btn-action" onClick={send} disabled={busy || !input.trim()}>
+          {busy ? '...' : 'Enviar'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Painel direito ──────────────────────────────────────────────────
 // onMove vem do componente principal onde character e setGameState existem
-function PanelRight({ node, connections, npcs, activeQuests, onlinePlayers, onMove, onHunt, hunting, onSave, saving, onExplore, exploring }) {
+function PanelRight({ node, connections, npcs, activeQuests, onlinePlayers, onMove, onHunt, hunting, onSave, saving, onExplore, exploring, characterId }) {
   const [activeTab, setActiveTab] = useState('world');
+  const [chatNpc, setChatNpc]     = useState(null); // NPC com conversa aberta
 
   const safeNpcs          = npcs          || [];
   const safeConnections   = connections   || [];
@@ -701,10 +770,18 @@ function PanelRight({ node, connections, npcs, activeQuests, onlinePlayers, onMo
                       {npc.description}
                     </div>
                   )}
-                  <button className="btn-action">Falar</button>
+                  <button className="btn-action" onClick={() => setChatNpc(npc)}>Falar</button>
                 </div>
               ))}
             </div>
+          )}
+
+          {chatNpc && (
+            <NpcChat
+              npc={chatNpc}
+              characterId={characterId}
+              onClose={() => setChatNpc(null)}
+            />
           )}
 
           {safeConnections.length > 0 && (
@@ -1146,6 +1223,7 @@ export default function Game() {
         saving={saving}
         onExplore={handleExplore}
         exploring={exploring}
+        characterId={character.id}
       />
 
       {combatState && (

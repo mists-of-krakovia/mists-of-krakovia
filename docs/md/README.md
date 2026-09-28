@@ -30,6 +30,7 @@ nos MDs**. Os PDFs são mantidos como referência da concepção original.
 | [Arquitetura MVP](arquitetura-mvp.md) | Loop principal, escopo e sistemas do MVP | `Mists_of_Krakovia_Documento_01_Arquitetura_MVP.pdf` |
 | [Bestiário — Região Inicial](bestiario-zona-inicial.md) | 30+ monstros e 5 bosses da Zona Livre/borda de Ironfall (pronto para virar seed) | — (conteúdo novo) |
 | [Mapa — Região Inicial](mapa-regiao-inicial.md) | Topologia da 1ª região: cidade grande + 3 assentamentos + 12 nós de exploração (3 com passagem secreta) + spawns | — (conteúdo novo) |
+| [NPCs — Região Inicial](npcs-regiao-inicial.md) | 8 NPCs (2 por assentamento) e suas respostas de diálogo por intenção | — (conteúdo novo) |
 
 > Nota: `docs/Master Document.pdf` é uma cópia do Volume V (classes) — não tem MD
 > próprio; ver [Classes](volume-v-classes.md).

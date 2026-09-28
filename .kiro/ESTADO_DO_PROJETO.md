@@ -227,7 +227,43 @@ desabilitada com motivo quando falta o item.
 (colunas inertes); raridades rare/epic/legendary como conteúdo; fabricação;
 economia/moeda/loja; durabilidade/desgaste.
 
-**Pendente:** e2e HTTP (subir o servidor — usuário) e commit.
+**Testado e2e e commitado/pushed** (commit a91d1da). Depois: bestiário+mapa+IA de
+combate avançada (commit c3d0ba8) e ação Explorar/passagens secretas (f457b13).
+
+### Bestiário, Mapa e IA avançada (commit c3d0ba8) — CONCLUÍDO
+- **Bestiário** (`docs/md/bestiario-zona-inicial.md`): 33 inimigos nv1–10 + 5 bosses
+  no `enemy_catalog` (via `scripts/seed-bestiary-{items,enemies}.js`); 22 itens novos
+  (materiais + 5 armas épicas de boss, uma por classe).
+- **Mapa** (`docs/md/mapa-regiao-inicial.md`): 19 nós (Ironfall cidade grande + 3
+  assentamentos incl. Belograd na borda + 12 exploração + 3 secretos), conexões por
+  eixo, spawns por nó + covis de boss (`scripts/seed-map-region.js`).
+- **IA de combate avançada**: perfis `defensive`/`caster` + habilidades de inimigo
+  (dano/status/cura/buff) em `combat.js`/`routes/combat.js`. 12 inimigos com IA
+  avançada. Adds dinâmicos (invocar no meio da luta) ficam 🔮.
+
+### Explorar / passagens secretas (commit f457b13) — CONCLUÍDO
+- `POST /characters/:id/explore`: procura passagem secreta no nó; chance por
+  Percepção + perícia Investigação (perícia domina); ao achar, revela a saída.
+  Botão "Explorar área" no painel de campo.
+
+### Spec 4 — DIÁLOGOS (NPCs) — CONCLUÍDO (e2e OK; commit pendente)
+Spec em `.kiro/specs/dialogos/`. Conflito de design RESOLVIDO: **motor de
+palavras-chave + intenção** (o jogador digita), não árvore nem LLM.
+- **Banco (migrations aplicadas):** `npc_dialogue` (respostas por NPC×intenção×
+  locale) e `character_npc_state` (trust 0–100, default 100; flags). Tabelas
+  `dialogue_*` antigas mantidas, reservadas. 8 NPCs (2/assentamento; Ironfall reusa
+  Maren Vosk) + 88 linhas de diálogo (pt) via `scripts/seed-npcs.js` e
+  `seed-npc-dialogue.js`. Conteúdo em `docs/md/npcs-regiao-inicial.md`.
+- **Backend:** `services/dialogueLexicon.js` (léxico por locale; pt completo, en
+  vazio), `services/dialogue.js` (normalize/levenshtein/detectIntent/pickReply;
+  OBSCENO sem fuzzy; tópico concreto vence conversa genérica), `routes/npcs.js`
+  (GET /npcs/:id, POST /npcs/:id/talk) sob `/npcs`.
+- **Frontend:** `NpcChat` (digitação + histórico) no painel; botão "Falar".
+- **i18n-ready** (locale), **confiança** com estrutura pronta (min_confidence=0 por
+  ora; mecanismos de alterar trust 🔮), **comércio/missão** só texto por ora,
+  **fallback LLM** 🔮. Verificado: unit 23/23 + intenção 9/9, e2e HTTP 11/11, lint 0,
+  build ok.
+**Pendente:** commit + push.
 
 ### Outras pendências menores (backlog, fora de spec ainda)
 - **Excluir personagem** (rota DELETE + botão na seleção) — pedido pelo usuário e
@@ -235,9 +271,8 @@ economia/moeda/loja; durabilidade/desgaste.
 - **Regeneração de estamina** (doc define regen; hoje só decresce).
 - ~~**Ações de inventário** (equipar/usar/descartar)~~ — FEITO no Spec 3 (Inventário).
 - **OAuth Google / "esqueci a senha"** — login é só email+senha.
-- **Diálogo NPC + confiança/reputação**: CONFLITO a resolver — schema usa árvore
-  de diálogo (dialogue_*), mas doc de interface pede motor de palavras-chave +
-  confiança. Decidir antes de implementar.
+- ~~**Diálogo NPC + confiança/reputação**: CONFLITO~~ — RESOLVIDO no Spec 4
+  (Diálogos): motor de palavras-chave + intenção (digitação). Ver abaixo.
 - **Produção/coleta por uso** (skill_type 'production' já existe no enum).
 - Dívida técnica: fórmula de `crit_chance` e outras derivadas podem precisar de
   ajuste fino de balanceamento conforme o combate for testado.

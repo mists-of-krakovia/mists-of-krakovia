@@ -53,7 +53,7 @@ Explorar novamente.
 | Exploração (buscar/coletar) | 🔮 |
 | Inventário / Itens | 🔄 (leitura pronta; loot real, ações e equipamento em spec — `.kiro/specs/inventario/`) |
 | Conhecimento / Documentos | 🔮 |
-| Confiança de NPC / Diálogo | 🔮 (conflito de design a resolver — ver Volume IV) |
+| Diálogo de NPC | ✅ motor de palavras-chave (digitação) — `.kiro/specs/dialogos/`; confiança 🔄 (estrutura pronta) |
 
 ---
 

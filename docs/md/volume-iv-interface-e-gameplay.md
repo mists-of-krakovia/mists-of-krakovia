@@ -143,19 +143,34 @@ cresce com a prática. Ainda não implementado.
 
 ---
 
-## Parte VI — NPCs e Sistema de Diálogo 🔮 (planejado)
+## Parte VI — NPCs e Sistema de Diálogo ✅ (implementado — motor de palavras-chave)
 
-> **Conflito de design a resolver:** o schema atual do banco tem árvore de diálogo
-> (`dialogue_trees/nodes/options`), mas este documento pede motor de
-> palavras-chave + confiança. Decidir a abordagem antes de implementar.
+> **Conflito resolvido.** Decisão: **motor de palavras-chave + intenção** (o
+> jogador digita; não é árvore de opções nem LLM). Detalhes em
+> `.kiro/specs/dialogos/`; conteúdo dos NPCs em `docs/md/npcs-regiao-inicial.md`.
+> As tabelas de árvore (`dialogue_trees/nodes/options`) **permanecem no schema,
+> reservadas** para cenas roteirizadas futuras, mas não são usadas por este sistema.
 
-- **Motor de reconhecimento por palavras-chave** (mais leve que LLM, mais
-  expressivo que REGEX): normalização (minúsculas, correção por distância de
-  Levenshtein ≤ 2), detecção de intenção (SAUDAÇÃO, MISSÃO, COMÉRCIO, KRAKOVIA,
-  NÉVOA, FACÇÃO, DESPEDIDA, DESCONHECIDO), e resposta com 3–5 variações.
-- **Confiança e Reputação:** NPC tem confiança 0–100 (por reputação de facção,
-  missões, escolhas). Nunca exibida como número — comunicada pelo tom. Confiança
-  alta abre fragmentos narrativos e missões exclusivas.
+- **Motor de reconhecimento por palavras-chave** ✅ (mais leve que LLM, mais
+  expressivo que REGEX): normalização (minúsculas, remoção de acentos, correção por
+  distância de Levenshtein ≤ 2 para tokens longos), detecção de **intenção**
+  (SAUDACAO, DESPEDIDA, SOBRE_NPC, MISSAO, COMERCIO, NEVOA, KRAKOVIA, FACCAO,
+  RUMORES, OBSCENO, DESCONHECIDO), e resposta com **3–5 variações** por NPC.
+  **i18n-ready:** léxico e respostas por `locale` (`pt` agora; `en` plugável).
+- **Easter egg:** a intenção **OBSCENO** (palavrões) dispara respostas cômicas em
+  personagem ("Vou lavar essa boca com sabão de cinza, moleque!").
+- **Confiança e Reputação** 🔄: a stat existe (`character_npc_state.trust`, 0–100) e
+  o motor **já filtra** respostas por `min_confidence`. Nunca exibida como número —
+  comunicada pelo tom. Por ora o `trust` inicia em 100 e os `min_confidence` das
+  respostas são 0 (tudo liberado); os **mecanismos que alteram a confiança**
+  (reputação de facção, missões, escolhas) e fragmentos exclusivos são 🔮.
+- **Comércio/Missão via diálogo** 🔄: por ora respondem só em **texto** ("ainda
+  não"); a loja e as quests reais virão com os respectivos sistemas.
+- **UI:** no painel de interação, "Falar" abre uma conversa com **caixa de texto**
+  (Enter envia) e histórico. ✅
+- **Fallback via LLM** 🔮: arquitetura deixa a porta aberta para, no futuro, usar um
+  modelo apenas no caso `DESCONHECIDO` (prompt travado, sem dar quests/fatos) —
+  mantendo custo baixo e a lore protegida. Não implementado.
 
 ---
 

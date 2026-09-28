@@ -257,6 +257,39 @@
 
 .npc-desc { font-size: 12px; line-height: 1.6; margin-bottom: 8px; }
 
+/* ── Conversa com NPC ── */
+.npc-chat { background: rgba(0,0,0,0.15); border-radius: 4px; padding: 10px; }
+.npc-chat-header {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 13px; font-weight: 500; margin-bottom: 8px;
+}
+.npc-chat-close {
+  background: transparent; border: none; color: var(--color-text-dim);
+  font-size: 18px; line-height: 1; cursor: pointer; padding: 0 4px;
+}
+.npc-chat-close:hover { color: var(--color-gold); }
+.npc-chat-log {
+  max-height: 220px; overflow-y: auto; display: flex; flex-direction: column;
+  gap: 6px; margin-bottom: 8px;
+}
+.npc-chat-line {
+  font-size: 13px; line-height: 1.5; padding: 5px 9px; border-radius: 8px; max-width: 85%;
+}
+.npc-chat-line.from-npc {
+  align-self: flex-start; background: #1a160e; color: var(--color-text);
+  border: 1px solid var(--color-border);
+}
+.npc-chat-line.from-player {
+  align-self: flex-end; background: rgba(201,168,76,0.14); color: var(--color-text);
+  border: 1px solid var(--color-border-gold);
+}
+.npc-chat-input { display: flex; gap: 6px; }
+.npc-chat-input input {
+  flex: 1; background: var(--color-bg-card); border: 1px solid var(--color-border);
+  color: var(--color-text); border-radius: 4px; padding: 6px 8px; font-size: 13px;
+}
+.npc-chat-input input:focus { outline: none; border-color: var(--color-border-gold); }
+
 .exit-item {
   display: flex;
   align-items: center;
