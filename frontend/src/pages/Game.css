@@ -290,6 +290,27 @@
 }
 .npc-chat-input input:focus { outline: none; border-color: var(--color-border-gold); }
 
+.npc-actions { display: flex; gap: 6px; }
+
+/* ── Loja ── */
+.shop-currency { font-size: 13px; margin-bottom: 8px; }
+.shop-tabs { display: flex; gap: 6px; margin-bottom: 8px; }
+.shop-tab {
+  flex: 1; font-size: 12px; padding: 4px; cursor: pointer;
+  background: var(--color-bg-card); border: 1px solid var(--color-border);
+  color: var(--color-text-dim); border-radius: 3px;
+}
+.shop-tab.active { border-color: var(--color-border-gold); color: var(--color-gold); }
+.shop-list { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; }
+.shop-row {
+  display: flex; align-items: center; gap: 8px; font-size: 13px;
+  padding: 4px 0; border-bottom: 1px solid var(--color-border);
+}
+.shop-row:last-child { border-bottom: none; }
+.shop-item-name  { flex: 1; }
+.shop-item-price { font-size: 12px; }
+.shop-msg { font-size: 12px; margin-top: 6px; font-style: italic; }
+
 .exit-item {
   display: flex;
   align-items: center;

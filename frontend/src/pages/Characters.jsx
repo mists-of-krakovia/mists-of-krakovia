@@ -56,7 +56,7 @@ function gradeLabel(value) {
 }
 
 // ─── Seleção de personagens ──────────────────────────────────────────
-function CharacterSelect({ characters, onSelect, onCreate, onLogout, username }) {
+function CharacterSelect({ characters, onSelect, onCreate, onDelete, onLogout, username }) {
   // 5 slots agora
   const emptySlots = Array.from({ length: 5 - characters.length });
 
@@ -95,6 +95,13 @@ function CharacterSelect({ characters, onSelect, onCreate, onLogout, username })
               </span>
             </div>
             <div className="slot-action">Jogar →</div>
+            <button
+              className="slot-delete"
+              title="Excluir personagem"
+              onClick={(e) => { e.stopPropagation(); onDelete(char); }}
+            >
+              Excluir
+            </button>
           </div>
         ))}
 
@@ -361,6 +368,26 @@ export default function CharactersPage() {
     navigate('/game');
   }
 
+  // Exclusão com confirmação dupla: primeiro um confirm, depois exige digitar o nome.
+  async function handleDelete(char) {
+    const first = window.confirm(
+      `Excluir ${char.name} (Nível ${char.level})? Esta ação é permanente e não pode ser desfeita.`
+    );
+    if (!first) return;
+    const typed = window.prompt(`Para confirmar, digite o nome do personagem: ${char.name}`);
+    if (typed == null) return;
+    if (typed.trim() !== char.name) {
+      alert('O nome não confere. Exclusão cancelada.');
+      return;
+    }
+    try {
+      await characterService.remove(char.id);
+      reloadCharacters();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Não foi possível excluir o personagem.');
+    }
+  }
+
   function handleLogout() {
     logout();
     navigate('/login');
@@ -393,6 +420,7 @@ export default function CharactersPage() {
       characters={characters}
       onSelect={handleSelect}
       onCreate={() => setCreating(true)}
+      onDelete={handleDelete}
       onLogout={handleLogout}
       username={user?.username}
     />

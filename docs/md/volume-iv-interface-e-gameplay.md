@@ -99,8 +99,10 @@ e XP/Nível. ✅
   implementados (movimento é imediato, custa estamina).
 
 ### Estamina
-Recurso fora do combate. Máximo = `100 + (MP_RES × 5)`. Movimento consome; hoje
-não regenera automaticamente (🔮 regeneração planejada). Custos de referência:
+Recurso fora do combate. Máximo = `100 + (MP_RES × 5)`. Movimento consome. **Regenera
+com o tempo** ✅ (baseado em tempo decorrido, sem cron): **5/min** descansando em
+assentamento/zona segura, **1/min** fora da névoa, **0.5/min** na névoa. Calculada ao
+entrar/mover, limitada ao máximo. Custos de referência:
 
 | Ação | Custo | Observação |
 |------|:-----:|------------|
@@ -202,9 +204,17 @@ combate. As habilidades **Granada Química, Ataque Envenenado, Poção em Área 
 Paralisante exigem e consomem** o item correspondente (sem o item, ficam
 indisponíveis).
 
-### Valor base e economia 🔮
-Cada item tem um **valor base** (campo preparado para a economia). Moeda, loja e
-comércio entre jogadores são 🔮 planejados (ver Multiplayer e Monetização abaixo).
+### Economia básica ✅
+- **Moeda de jogo:** `characters.currency` (inteiro). Ganha vendendo itens a um NPC
+  vendedor. `moeda_antiga` continua sendo um **item** (tesouro pré-Cataclisma), mas
+  ao ser vendida paga o **valor cheio** (é dinheiro).
+- **Vendedor** (`npcs.is_vendor`): o comerciante **Josef Marchenko** em Ironfall.
+  Compra qualquer item com `base_value > 0` do jogador (paga **50%** do valor base;
+  `moeda_antiga` = 100%) e vende um estoque fixo de consumíveis (poção, frasco de
+  veneno, granadas) por **150%** do valor base. UI de loja (abas Comprar/Vender) no
+  painel de interação (botão "Negociar" no NPC vendedor).
+- 🔮 **Comércio entre jogadores** (direto e mercado regional) permanece planejado
+  (ver Multiplayer e Monetização abaixo).
 
 ---
 
@@ -247,8 +257,8 @@ expressão e benefícios coletivos.
 ## Apêndice — Diferenças em relação ao PDF
 
 - Criação: **5 etapas → 3 etapas** (etapa de perícias removida; avatar 🔮).
-- **Excluir personagem:** previsto no PDF, ainda 🔮 não implementado.
-- **Regeneração de estamina:** o PDF define regen (1/min fora, 0.5/min na névoa,
-  5/min descansando); hoje a estamina só decresce. 🔮
+- **Excluir personagem:** ✅ implementado (botão na seleção, com confirmação dupla).
+- **Regeneração de estamina:** ✅ implementada (1/min fora, 0.5/min na névoa,
+  5/min descansando; baseada em tempo, calculada ao entrar/mover).
 - **Ações de campo:** só "Caçar" está ativa; Buscar/Coletar/Explorar 🔮.
 - **NPC/diálogo:** conflito schema (árvore) × doc (palavras-chave) a resolver.

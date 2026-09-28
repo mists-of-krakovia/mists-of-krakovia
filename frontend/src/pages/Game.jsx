@@ -722,11 +722,109 @@ function NpcChat({ npc, characterId, onClose }) {
   );
 }
 
+// ─── Loja do vendedor ─────────────────────────────────────────────────
+function NpcShop({ npc, characterId, inventory, onClose, onChange }) {
+  const [tab, setTab]         = useState('buy'); // 'buy' | 'sell'
+  const [stock, setStock]     = useState([]);
+  const [currency, setCurrency] = useState(0);
+  const [busy, setBusy]       = useState(false);
+  const [msg, setMsg]         = useState('');
+
+  const loadShop = useCallback(async () => {
+    try {
+      const { data } = await npcService.shop(npc.id, characterId);
+      setStock(data.stock || []);
+      setCurrency(data.currency || 0);
+    } catch (err) {
+      setMsg(err.response?.data?.error || 'Não foi possível abrir a loja.');
+    }
+  }, [npc.id, characterId]);
+
+  // Fetch assíncrono: o setState ocorre após o await, não sincronamente no effect.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { void loadShop(); }, [loadShop]);
+
+  // Itens vendáveis: mochila (não equipados) com valor de venda.
+  const sellable = (inventory || []).filter(
+    (inv) => !inv.is_equipped && (inv.items?.base_value || 0) > 0
+  );
+
+  async function doBuy(slug) {
+    if (busy) return;
+    setBusy(true); setMsg('');
+    try {
+      const { data } = await npcService.buy(npc.id, characterId, slug, 1);
+      setCurrency(data.currency);
+      setMsg(`Comprou ${data.itemName} por ${data.cost}.`);
+      if (onChange) await onChange();
+    } catch (err) {
+      setMsg(err.response?.data?.error || 'Não foi possível comprar.');
+    } finally { setBusy(false); }
+  }
+
+  async function doSell(inv) {
+    if (busy) return;
+    setBusy(true); setMsg('');
+    try {
+      const { data } = await npcService.sell(npc.id, characterId, inv.id, 1);
+      setCurrency(data.currency);
+      setMsg(`Vendeu ${data.itemName} por ${data.gain}.`);
+      if (onChange) await onChange();
+    } catch (err) {
+      setMsg(err.response?.data?.error || 'Não foi possível vender.');
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="interaction-section npc-chat">
+      <div className="npc-chat-header">
+        <span className="text-gold">{npc.name} — Comércio</span>
+        <button className="npc-chat-close" onClick={onClose} title="Fechar loja">×</button>
+      </div>
+      <div className="shop-currency text-gold">Moeda: {currency}</div>
+      <div className="shop-tabs">
+        <button className={`shop-tab ${tab === 'buy' ? 'active' : ''}`} onClick={() => setTab('buy')}>Comprar</button>
+        <button className={`shop-tab ${tab === 'sell' ? 'active' : ''}`} onClick={() => setTab('sell')}>Vender</button>
+      </div>
+
+      {tab === 'buy' && (
+        <div className="shop-list">
+          {stock.length === 0 && <p className="text-dim" style={{ fontSize: 13 }}>Sem estoque.</p>}
+          {stock.map((it) => (
+            <div key={it.slug} className="shop-row">
+              <span className="shop-item-name">{it.name}</span>
+              <span className="shop-item-price text-dim">{it.price}</span>
+              <button className="inv-btn" disabled={busy || currency < it.price} onClick={() => doBuy(it.slug)}>Comprar</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {tab === 'sell' && (
+        <div className="shop-list">
+          {sellable.length === 0 && <p className="text-dim" style={{ fontSize: 13 }}>Nada para vender.</p>}
+          {sellable.map((inv) => (
+            <div key={inv.id} className="shop-row">
+              <span className="shop-item-name">
+                {inv.items?.name}{inv.quantity > 1 ? ` ×${inv.quantity}` : ''}
+              </span>
+              <button className="inv-btn" disabled={busy} onClick={() => doSell(inv)}>Vender</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {msg && <p className="shop-msg text-dim">{msg}</p>}
+    </div>
+  );
+}
+
 // ─── Painel direito ──────────────────────────────────────────────────
 // onMove vem do componente principal onde character e setGameState existem
-function PanelRight({ node, connections, npcs, activeQuests, onlinePlayers, onMove, onHunt, hunting, onSave, saving, onExplore, exploring, characterId }) {
+function PanelRight({ node, connections, npcs, activeQuests, onlinePlayers, onMove, onHunt, hunting, onSave, saving, onExplore, exploring, characterId, inventory, onShopChange }) {
   const [activeTab, setActiveTab] = useState('world');
   const [chatNpc, setChatNpc]     = useState(null); // NPC com conversa aberta
+  const [shopNpc, setShopNpc]     = useState(null); // NPC vendedor com loja aberta
 
   const safeNpcs          = npcs          || [];
   const safeConnections   = connections   || [];
@@ -770,7 +868,12 @@ function PanelRight({ node, connections, npcs, activeQuests, onlinePlayers, onMo
                       {npc.description}
                     </div>
                   )}
-                  <button className="btn-action" onClick={() => setChatNpc(npc)}>Falar</button>
+                  <div className="npc-actions">
+                    <button className="btn-action" onClick={() => setChatNpc(npc)}>Falar</button>
+                    {npc.is_vendor && (
+                      <button className="btn-action" onClick={() => setShopNpc(npc)}>Negociar</button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -781,6 +884,16 @@ function PanelRight({ node, connections, npcs, activeQuests, onlinePlayers, onMo
               npc={chatNpc}
               characterId={characterId}
               onClose={() => setChatNpc(null)}
+            />
+          )}
+
+          {shopNpc && (
+            <NpcShop
+              npc={shopNpc}
+              characterId={characterId}
+              inventory={inventory || []}
+              onClose={() => setShopNpc(null)}
+              onChange={onShopChange}
             />
           )}
 
@@ -1224,6 +1337,8 @@ export default function Game() {
         onExplore={handleExplore}
         exploring={exploring}
         characterId={character.id}
+        inventory={gameState.inventory || []}
+        onShopChange={loadGameState}
       />
 
       {combatState && (

@@ -266,9 +266,12 @@ palavras-chave + intenção** (o jogador digita), não árvore nem LLM.
 **Pendente:** commit + push.
 
 ### Outras pendências menores (backlog, fora de spec ainda)
-- **Excluir personagem** (rota DELETE + botão na seleção) — pedido pelo usuário e
-  pelo doc de interface, ainda NÃO implementado.
-- **Regeneração de estamina** (doc define regen; hoje só decresce).
+- ~~**Excluir personagem**~~ — FEITO (DELETE /characters/:id + botão na seleção com
+  confirmação dupla).
+- ~~**Regeneração de estamina**~~ — FEITO (por tempo: 5/min rest, 1/min campo,
+  0.5/min névoa; no /enter e /move; `characters.stamina_updated_at`).
+- ~~**Economia básica**~~ — FEITO (moeda `characters.currency`; NPC vendedor Josef
+  Marchenko em Ironfall com loja comprar/vender; `moeda_antiga` = dinheiro).
 - ~~**Ações de inventário** (equipar/usar/descartar)~~ — FEITO no Spec 3 (Inventário).
 - **OAuth Google / "esqueci a senha"** — login é só email+senha.
 - ~~**Diálogo NPC + confiança/reputação**: CONFLITO~~ — RESOLVIDO no Spec 4

@@ -3,6 +3,7 @@ const router = express.Router();
 const { supabase } = require('../server');
 const { calculateDerived, applyLevelBonus } = require('../services/character');
 const equipment = require('../services/equipment');
+const stamina = require('../services/stamina');
 const { authenticateToken } = require('../services/auth');
 const {
   INITIAL_SKILLS_BY_CLASS,
@@ -38,6 +39,52 @@ router.get('/', async (req, res) => {
   }
 
   res.json(data);
+});
+
+// DELETE /characters/:characterId
+// Exclui um personagem do jogador. Limpa defensivamente as tabelas cujas FKs podem
+// não ter ON DELETE CASCADE garantido (combate/exploração), depois deleta o
+// personagem — o restante (atributos, derivados, inventário, perícias, sessões,
+// descobertas, estado de NPC) cai por cascade.
+router.delete('/:characterId', async (req, res) => {
+  try {
+    const { characterId } = req.params;
+
+    // Propriedade.
+    const { data: character } = await supabase
+      .from('characters').select('id, name').eq('id', characterId)
+      .eq('account_id', req.userId).maybeSingle();
+    if (!character) return res.status(404).json({ error: 'Personagem não encontrado.' });
+
+    // Limpeza defensiva (idempotente) das referências sem cascade garantido.
+    // combat_participants referencia sessões; sessões referenciam o personagem.
+    const { data: sessions } = await supabase
+      .from('combat_sessions').select('id').eq('initiator_id', characterId);
+    const sessionIds = (sessions || []).map((s) => s.id);
+    if (sessionIds.length > 0) {
+      await supabase.from('combat_participants').delete().in('session_id', sessionIds);
+      await supabase.from('combat_turns').delete().in('session_id', sessionIds);
+      await supabase.from('combat_sessions').delete().in('id', sessionIds);
+    }
+    // combat_participants que referenciam o personagem diretamente (ally).
+    await supabase.from('combat_participants').delete().eq('character_id', characterId);
+    // exploration_attempts (FK sem cascade no schema inicial).
+    await supabase.from('exploration_attempts').delete().eq('character_id', characterId);
+
+    // Deleta o personagem (cascade cobre attributes/derived/inventory/skills/
+    // sessions de local/discovered/npc_state/etc).
+    const { error: delErr } = await supabase
+      .from('characters').delete().eq('id', characterId).eq('account_id', req.userId);
+    if (delErr) {
+      console.error('[delete] erro:', delErr.message);
+      return res.status(500).json({ error: 'Erro ao excluir o personagem.' });
+    }
+
+    res.json({ ok: true, deletedName: character.name });
+  } catch (err) {
+    console.error('[delete] EXCEPTION:', err && err.message);
+    res.status(500).json({ error: 'Erro ao excluir o personagem.' });
+  }
 });
 
 // POST /characters
@@ -244,6 +291,26 @@ router.post('/:characterId/enter', async (req, res) => {
     .eq('id', nodeId)
     .single();
 
+  // Regeneração de estamina baseada em tempo (Volume III). Calcula o ganho desde
+  // stamina_updated_at na taxa do nó atual e persiste. Só reseta o timestamp quando
+  // houve ganho inteiro (>0), para não perder a fração acumulada em visitas curtas.
+  {
+    const derivedRow = Array.isArray(character.character_derived)
+      ? character.character_derived[0] : character.character_derived;
+    if (derivedRow) {
+      const r = stamina.computeRegen(
+        derivedRow.stamina_current, derivedRow.stamina_max,
+        character.stamina_updated_at, node);
+      if (r.regened > 0) {
+        await supabase.from('character_derived')
+          .update({ stamina_current: r.stamina }).eq('character_id', characterId);
+        await supabase.from('characters')
+          .update({ stamina_updated_at: new Date().toISOString() }).eq('id', characterId);
+        derivedRow.stamina_current = r.stamina; // reflete no payload
+      }
+    }
+  }
+
   const { data: allConnections } = await supabase
     .from('node_connections')
     .select(`
@@ -267,7 +334,7 @@ router.post('/:characterId/enter', async (req, res) => {
 
   const { data: npcs } = await supabase
     .from('npcs')
-    .select('id, name, description, is_quest_giver')
+    .select('id, name, description, is_quest_giver, is_vendor')
     .eq('node_id', nodeId);
 
   const { data: quests } = await supabase
@@ -809,7 +876,9 @@ router.post('/:characterId/move', async (req, res) => {
       .eq('character_id', characterId),
     supabase
       .from('characters')
-      .update({ current_node_id: toNodeId })
+      // move consome estamina e reinicia o relógio da regeneração (conta a partir
+      // da chegada ao novo nó, na taxa daquele nó).
+      .update({ current_node_id: toNodeId, stamina_updated_at: new Date().toISOString() })
       .eq('id', characterId)
   ]);
 

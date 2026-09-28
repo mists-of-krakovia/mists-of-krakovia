@@ -49,6 +49,9 @@ export const characterService = {
   enter: (characterId) =>
     api.post(`/characters/${characterId}/enter`),
 
+  remove: (characterId) =>
+    api.delete(`/characters/${characterId}`),
+
   allocateSkills: (characterId, alloc) =>
     api.post(`/characters/${characterId}/skills/allocate`, alloc),
 
@@ -72,11 +75,23 @@ export const skillService = {
     api.get('/skills/catalog')
 };
 
-// NPCs / Diálogo
+// NPCs / Diálogo / Comércio
 export const npcService = {
   // Conversa: o jogador digita e o NPC responde (motor de palavras-chave).
   talk: (npcId, characterId, text, locale = 'pt') =>
-    api.post(`/npcs/${npcId}/talk`, { characterId, text, locale })
+    api.post(`/npcs/${npcId}/talk`, { characterId, text, locale }),
+
+  // Loja (vendedor): estoque + saldo.
+  shop: (npcId, characterId) =>
+    api.get(`/npcs/${npcId}/shop`, { params: { characterId } }),
+
+  // Vender item do inventário ao NPC.
+  sell: (npcId, characterId, inventoryId, quantity = 1) =>
+    api.post(`/npcs/${npcId}/sell`, { characterId, inventoryId, quantity }),
+
+  // Comprar item do estoque do NPC.
+  buy: (npcId, characterId, itemSlug, quantity = 1) =>
+    api.post(`/npcs/${npcId}/buy`, { characterId, itemSlug, quantity })
 };
 
 // Inventário (ações fora de combate)
