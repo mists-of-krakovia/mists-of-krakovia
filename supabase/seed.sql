@@ -416,3 +416,20 @@ UPDATE "public"."enemy_catalog" SET "loot_table" = '[
   {"item_slug":"granada_quimica","chance":0.15,"min":1,"max":1},
   {"item_slug":"escudo_madeira","chance":0.1,"min":1,"max":1}
 ]'::jsonb WHERE "slug" = 'sabujo_de_ferro';
+
+-- ─── Bestiário da região inicial (Spec de conteúdo) ───────────────────────
+-- O bestiário ampliado (16 materiais + 5 armas épicas de boss + 33 inimigos,
+-- incluindo 5 bosses nv10) e suas loot_table são semeados por scripts Node
+-- idempotentes (REST), NÃO por este arquivo, para evitar duplicar centenas de
+-- linhas e por consistência com o fluxo da máquina (db push não roda seed):
+--   backend/scripts/seed-bestiary-items.js    (itens: materiais + armas épicas)
+--   backend/scripts/seed-bestiary-enemies.js  (enemy_catalog: monstros + bosses)
+-- Fonte de verdade do conteúdo (atributos, drops, descrições):
+--   docs/md/bestiario-zona-inicial.md
+-- O mapa da região inicial (19 nós: 4 assentamentos + 12 exploração + 3 secretos),
+-- suas conexões e os node_spawns (distribuição de monstros/bosses por nó) são
+-- semeados por outro script Node idempotente:
+--   backend/scripts/seed-map-region.js   (world_nodes + node_connections + node_spawns)
+-- Fonte de verdade do mapa: docs/md/mapa-regiao-inicial.md
+-- Esse script RECONSTRÓI conexões/spawns dos nós da região (idempotente) e
+-- reaproveita os nós existentes por description_key.

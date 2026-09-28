@@ -486,10 +486,24 @@ async function runEnemyTurns(session, participants) {
     if (endAfterTick !== 'active') { session.status = endAfterTick; return { ended: true }; }
     if (st.disabled) { session.active_index += 1; continue; }
 
-    // ator inimigo: escolhe alvo/tipo
+    // ator inimigo: escolhe ação conforme o perfil de IA.
     const allies = participants.filter((p) => p.side === 'ally');
     const action = combat.enemyChooseAction(actor, allies);
     if (!action) { session.active_index += 1; continue; }
+
+    // Ações não-atacantes (habilidade/buff): resolvem direto, sem reação do jogador.
+    if (action.kind === 'ability' || action.kind === 'buff') {
+      const abTarget = action.targetId ? byId(participants, action.targetId) : actor;
+      const out = combat.resolveEnemyAbility(actor, abTarget || actor, action.ability);
+      for (const l of out.lines) pushEvent(session, l);
+      if (abTarget && abTarget.is_defeated) pushEvent(session, combat.narrateDefeat(abTarget));
+      await logTurn(session.id, session.round_number, session.active_index, actor.id,
+        abTarget ? abTarget.id : null, `enemy_ability_${(action.ability && action.ability.slug) || 'x'}`, { lines: out.lines });
+      session.active_index += 1;
+      const endAb = combat.checkEnd(participants);
+      if (endAb !== 'active') { session.status = endAb; return { ended: true }; }
+      continue;
+    }
 
     const target = byId(participants, action.targetId);
 

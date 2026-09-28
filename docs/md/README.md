@@ -28,6 +28,8 @@ nos MDs**. Os PDFs são mantidos como referência da concepção original.
 | [Classes (Volume V)](volume-v-classes.md) | 5 classes, habilidades nv1–10, cooldown por Velocidade | `mists_of_krakovia_classes_v2.pdf` |
 | [Roadmap](roadmap.md) | Fases 0–6 do desenvolvimento | `Mists of Krakovian Roadmap.pdf` |
 | [Arquitetura MVP](arquitetura-mvp.md) | Loop principal, escopo e sistemas do MVP | `Mists_of_Krakovia_Documento_01_Arquitetura_MVP.pdf` |
+| [Bestiário — Região Inicial](bestiario-zona-inicial.md) | 30+ monstros e 5 bosses da Zona Livre/borda de Ironfall (pronto para virar seed) | — (conteúdo novo) |
+| [Mapa — Região Inicial](mapa-regiao-inicial.md) | Topologia da 1ª região: cidade grande + 3 assentamentos + 12 nós de exploração (3 com passagem secreta) + spawns | — (conteúdo novo) |
 
 > Nota: `docs/Master Document.pdf` é uma cópia do Volume V (classes) — não tem MD
 > próprio; ver [Classes](volume-v-classes.md).

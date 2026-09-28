@@ -223,6 +223,10 @@ function buildEnemyParticipant(enemy, slot = 0, indexSuffix = '') {
     mp_agi:        Math.round(enemy.speed / 2),
     attack_types:  enemy.attack_types || ['quick', 'strong'],
     ai_profile:    enemy.ai_profile || 'attacker_simple',
+    // Habilidades do inimigo (enemy_catalog.abilities jsonb). Cada uma:
+    //   { slug, name, cooldown, effect: { type, ... } } — resolvidas por
+    //   resolveEnemyAbility. Vazio para os inimigos simples.
+    enemy_abilities: Array.isArray(enemy.abilities) ? enemy.abilities : [],
     speed_penalty_next: 0,
   };
   return {
@@ -382,15 +386,123 @@ function resolveCounter({ defender, attacker }) {
   return { damage: dmg, note: 'Contra-ataque!' };
 }
 
-// ─── IA do inimigo ───────────────────────────────────────────────────────────
-// attacker_simple: escolhe um alvo aliado vivo e um tipo dentre attack_types.
+// ─── IA do inimigo (perfis) ───────────────────────────────────────────────────
+// Retorna uma AÇÃO do inimigo. Formatos:
+//   { kind: 'attack',  targetId, type }            -> ataque normal (reagível)
+//   { kind: 'ability', targetId, ability }         -> habilidade (dano/status; não reagível)
+//   { kind: 'buff',    ability }                   -> auto-buff (postura defensiva)
+// Perfis (enemy.stats.ai_profile):
+//   attacker_simple: só ataca (comportamento original).
+//   defensive: com HP baixo, assume postura defensiva (buff de defesa) de vez em
+//     quando; caso contrário ataca (preferindo Forte). Mira o alvo mais ferido.
+//   caster: usa uma habilidade disponível (fora de cooldown) sempre que possível;
+//     senão ataca. Mira o alvo mais ferido para dano; self para cura.
 function enemyChooseAction(enemy, allies) {
   const targets = allies.filter((a) => !a.is_defeated);
   if (targets.length === 0) return null;
-  const target = targets[rng(0, targets.length - 1)];
+
+  const profile = enemy.stats.ai_profile || 'attacker_simple';
   const types = enemy.stats.attack_types || ['quick', 'strong'];
+  const hpRatio = enemy.hp_max ? enemy.hp_current / enemy.hp_max : 1;
+  // Alvo mais ferido (menor HP absoluto) para casters/defensivos concentrarem dano.
+  const weakest = targets.reduce((a, b) => (b.hp_current < a.hp_current ? b : a), targets[0]);
+  const randomTarget = targets[rng(0, targets.length - 1)];
+
+  // Habilidades disponíveis (fora de cooldown).
+  const cds = enemy.cooldowns || {};
+  const readyAbilities = (enemy.stats.enemy_abilities || [])
+    .filter((ab) => ab && ab.slug && (cds[ab.slug] || 0) <= 0);
+
+  if (profile === 'caster' && readyAbilities.length > 0) {
+    // 60% de chance de usar uma habilidade quando há alguma pronta.
+    if (chance(0.6)) {
+      const ability = readyAbilities[rng(0, readyAbilities.length - 1)];
+      const selfTargeted = ability.effect && (ability.effect.type === 'self_heal' || ability.effect.self);
+      return { kind: 'ability', targetId: selfTargeted ? enemy.id : weakest.id, ability };
+    }
+  }
+
+  if (profile === 'defensive') {
+    // HP baixo e sem postura ativa: assume defesa (uma vez por janela de 2 turnos).
+    if (hpRatio < 0.5 && !hasEffect(enemy, 'buff') && chance(0.4)) {
+      return { kind: 'buff', ability: {
+        slug: '_postura_defensiva', name: 'Postura Defensiva',
+        effect: { type: 'self_buff', mods: { defense: Math.max(4, Math.round(enemy.stats.defense * 0.5)) }, turns: 2 },
+      } };
+    }
+    // caso contrário, ataca preferindo Forte (se disponível).
+    const type = types.includes('strong') ? 'strong' : types[rng(0, types.length - 1)];
+    return { kind: 'attack', targetId: weakest.id, type };
+  }
+
+  // attacker_simple (e fallback): alvo aleatório, tipo aleatório.
   const type = types[rng(0, types.length - 1)];
-  return { targetId: target.id, type };
+  return { kind: 'attack', targetId: randomTarget.id, type };
+}
+
+// Resolve uma habilidade do inimigo (dano escalado / status / cura / buff).
+// Muta os participantes. Retorna { lines } para narração. Aplica cooldown no ator.
+//   ability.effect.type: 'scaled_attack' | 'attack_status' | 'self_heal' | 'self_buff'
+function resolveEnemyAbility(actor, target, ability) {
+  const eff = (ability && ability.effect) || {};
+  const lines = [];
+  const who = actor.display_name;
+  lines.push(`${who} usa ${ability.name || 'uma habilidade'}.`);
+
+  const dealDamage = (t, amount) => {
+    const dmg = Math.max(1, Math.round(amount));
+    t.hp_current = Math.max(0, t.hp_current - dmg);
+    if (t.hp_current === 0) t.is_defeated = true;
+    return dmg;
+  };
+
+  switch (eff.type) {
+    case 'scaled_attack': {
+      // Dano = attack_melee do inimigo x mult (+ variação), menos defesa do alvo.
+      const aStats = effectiveStats(actor);
+      const dStats = effectiveStats(target);
+      const raw = (aStats.attack_melee || 0) * (eff.mult || 1.5) + rng(1, 8);
+      const d = dealDamage(target, raw - (dStats.defense || 0));
+      lines.push(`${d} de dano em ${target.side === 'ally' ? 'você' : target.display_name}.`);
+      for (const ap of eff.applies || []) {
+        if (!target.is_defeated) { addEffect(target, { ...ap }); lines.push(`${target.display_name || 'você'}: ${ap.name || 'efeito'}.`); }
+      }
+      break;
+    }
+    case 'attack_status': {
+      const aStats = effectiveStats(actor);
+      const dStats = effectiveStats(target);
+      const raw = (aStats.attack_melee || 0) * (eff.mult || 1) + rng(1, 8);
+      const d = dealDamage(target, raw - (dStats.defense || 0));
+      lines.push(`${d} de dano em ${target.side === 'ally' ? 'você' : target.display_name}.`);
+      if (!target.is_defeated && eff.status && chance(eff.statusChance != null ? eff.statusChance : 1)) {
+        addEffect(target, { kind: eff.status.kind, name: eff.status.name, turns: eff.status.turns || 1, damage: eff.status.damage });
+        lines.push(`${target.display_name || 'você'}: ${eff.status.name}!`);
+      }
+      break;
+    }
+    case 'self_heal': {
+      const amount = Math.round((actor.hp_max || 0) * (eff.pct || 0.15));
+      const before = actor.hp_current;
+      actor.hp_current = Math.min(actor.hp_max, actor.hp_current + amount);
+      lines.push(`${who} se recupera em ${actor.hp_current - before} de PV.`);
+      break;
+    }
+    case 'self_buff': {
+      addEffect(actor, { kind: 'buff', name: ability.name || 'Postura', turns: eff.turns || 2, mods: eff.mods || {} });
+      lines.push(`${who} assume uma postura mais forte.`);
+      break;
+    }
+    default:
+      lines.push('(sem efeito.)');
+  }
+
+  // Cooldown da habilidade do inimigo.
+  if (ability.slug && ability.cooldown) {
+    actor.cooldowns = actor.cooldowns || {};
+    actor.cooldowns[ability.slug] = ability.cooldown;
+  }
+  return { lines };
 }
 
 // ─── Fim de combate ──────────────────────────────────────────────────────────
@@ -487,6 +599,7 @@ module.exports = {
   resolveAttack,
   resolveCounter,
   enemyChooseAction,
+  resolveEnemyAbility,
   checkEnd,
   sumXpReward,
   pickSpawn,
