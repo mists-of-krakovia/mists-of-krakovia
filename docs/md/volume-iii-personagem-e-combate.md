@@ -66,9 +66,13 @@ neutro, +). F é o mínimo funcional; S+ é o ápice absoluto.
 ### Distribuição de pontos de atributo
 
 - **Criação:** 5 pontos para distribuir livremente. Nenhum atributo acima de D+
-  (máximo +4 sobre a base E = valor 9). Todos começam em E (valor 5).
+  (máximo +4 sobre a base E = valor 9). Todos começam em E (valor 5). Os pontos
+  **devem ser gastos na criação** — o que não for distribuído é descartado (o
+  personagem não fica com pontos disponíveis após criado).
 - **Por nível:** +3 pontos de atributo, sem restrição de distribuição. Ficam
-  disponíveis para o jogador gastar na tela de Personagem.
+  disponíveis para o jogador gastar na tela de Personagem. **É a única fonte de
+  pontos de atributo após a criação.**
+- **Nome:** único no mundo (não pode repetir um nome de personagem já existente).
 
 ---
 

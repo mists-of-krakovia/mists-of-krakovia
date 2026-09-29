@@ -161,6 +161,17 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ error: 'Nome deve ter entre 2 e 20 caracteres.' });
   }
 
+  // Nome de personagem é ÚNICO NO MUNDO (case-insensitive). Usa o cliente
+  // service_role (ignora RLS) para checar contra todos os personagens.
+  {
+    const trimmed = name.trim();
+    const { data: nameClash } = await supabase
+      .from('characters').select('id').ilike('name', trimmed).limit(1);
+    if (nameClash && nameClash.length > 0) {
+      return res.status(400).json({ error: 'Já existe um personagem com esse nome. Escolha outro.' });
+    }
+  }
+
   const validClasses = [
     'vagante_nevoas', 'arauto_conclave',
     'exilado_ferro', 'confessor_veu', 'cronista_ruinas'
@@ -198,7 +209,9 @@ router.post('/', async (req, res) => {
     intellect:        5 + spent.intellect,
     perception:       5 + spent.perception,
     sanity:           5 + spent.sanity,
-    points_available: 5 - totalSpent
+    // Pós-criação o personagem NÃO fica com pontos de atributo disponíveis: o que
+    // não foi distribuído na criação se perde. Novos pontos só vêm por nível.
+    points_available: 0
   };
 
   // Nó inicial: Ironfall — Distrito Central. Buscado por description_key
@@ -243,6 +256,8 @@ router.post('/', async (req, res) => {
       xp_to_next:         100,
       current_node_id:    startNodeId,
       last_settlement_id: startNodeId,
+      // Recurso inicial: currency para ~10 descansos na pousada (REST_COST=10).
+      currency:           100,
       is_active:          false
     })
     .select()
@@ -388,9 +403,35 @@ router.post('/:characterId/enter', async (req, res) => {
     c.is_visible || discoveredIds.has(c.to_node_id)
   );
 
+  // Nível médio dos inimigos por nó (para o jogador calibrar antes de ir/caçar).
+  // Calcula sobre node_spawns ATIVOS (fauna; ignora bosses, que distorcem a média)
+  // dos nós relevantes: o atual + os destinos das conexões visíveis.
+  const relevantNodeIds = [nodeId, ...connections.map((c) => c.to_node_id)];
+  const nodeAvgLevel = {}; // node_id -> número inteiro (ou null se sem spawn)
+  {
+    const { data: spawnRows } = await supabase
+      .from('node_spawns')
+      .select('node_id, enemy_slug, enemy_catalog ( level, is_rare )')
+      .in('node_id', relevantNodeIds)
+      .eq('is_active', true);
+    const acc = {}; // node_id -> { sum, n }
+    for (const sp of spawnRows || []) {
+      const lvl = sp.enemy_catalog?.level;
+      // ignora bosses (slug boss_* ) na média — são encontros especiais.
+      if (lvl == null || String(sp.enemy_slug).startsWith('boss_')) continue;
+      if (!acc[sp.node_id]) acc[sp.node_id] = { sum: 0, n: 0 };
+      acc[sp.node_id].sum += lvl; acc[sp.node_id].n += 1;
+    }
+    for (const id of relevantNodeIds) {
+      nodeAvgLevel[id] = acc[id] ? Math.round(acc[id].sum / acc[id].n) : null;
+    }
+  }
+  // Anexa o nível médio do destino a cada conexão.
+  for (const c of connections) c.avg_level = nodeAvgLevel[c.to_node_id] ?? null;
+
   const { data: npcs } = await supabase
     .from('npcs')
-    .select('id, name, description, is_quest_giver, is_vendor')
+    .select('id, name, description, is_quest_giver, is_vendor, is_innkeeper')
     .eq('node_id', nodeId);
 
   const { data: quests } = await supabase
@@ -497,6 +538,7 @@ router.post('/:characterId/enter', async (req, res) => {
     equipmentBonus: equip.totals,
     equipmentBySource: equip.bySource,
     weightPenalty: weight,
+    nodeAvgLevel:  nodeAvgLevel[nodeId] ?? null, // nível médio dos inimigos do nó atual
     onlinePlayers
   });
 });

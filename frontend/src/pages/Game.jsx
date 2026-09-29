@@ -162,7 +162,7 @@ function PanelLeft({ character, currentPage, onNavigate, onLogout }) {
 }
 
 // ─── Página: Mundo ───────────────────────────────────────────────────
-function PageWorld({ node, clock, narrationSeed }) {
+function PageWorld({ node, clock, narrationSeed, nodeAvgLevel }) {
   const phaseLabel = clock?.currentPhase === 'morning' ? 'Dia' : 'Noite';
   const minutes    = clock?.secondsUntilNextPhase
     ? Math.ceil(clock.secondsUntilNextPhase / 60) : null;
@@ -187,7 +187,12 @@ function PageWorld({ node, clock, narrationSeed }) {
   return (
     <div className="page-content">
       <div className="world-header">
-        <div className="world-location text-gold">{node?.name}</div>
+        <div className="world-location text-gold">
+          {node?.name}
+          {!node?.is_safe_zone && nodeAvgLevel != null && (
+            <span className="world-level text-dim"> · inimigos ~nv {nodeAvgLevel}</span>
+          )}
+        </div>
         <div className="world-clock text-dim">
           {phaseLabel}
           {minutes !== null &&
@@ -908,7 +913,7 @@ function NpcShop({ npc, characterId, inventory, onClose, onChange }) {
 
 // ─── Painel direito ──────────────────────────────────────────────────
 // onMove vem do componente principal onde character e setGameState existem
-function PanelRight({ node, connections, npcs, activeQuests, onlinePlayers, onMove, onHunt, hunting, onSave, saving, onExplore, exploring, characterId, inventory, onShopChange }) {
+function PanelRight({ node, connections, npcs, activeQuests, onlinePlayers, onMove, onHunt, hunting, onSave, saving, onExplore, exploring, characterId, inventory, onShopChange, onRest }) {
   const [activeTab, setActiveTab] = useState('world');
   const [chatNpc, setChatNpc]     = useState(null); // NPC com conversa aberta
   const [shopNpc, setShopNpc]     = useState(null); // NPC vendedor com loja aberta
@@ -960,6 +965,9 @@ function PanelRight({ node, connections, npcs, activeQuests, onlinePlayers, onMo
                     {npc.is_vendor && (
                       <button className="btn-action" onClick={() => setShopNpc(npc)}>Negociar</button>
                     )}
+                    {npc.is_innkeeper && (
+                      <button className="btn-action" onClick={() => onRest(npc)}>Descansar</button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -991,9 +999,11 @@ function PanelRight({ node, connections, npcs, activeQuests, onlinePlayers, onMo
                 <div key={conn.id} className="exit-item">
                   <div className="exit-info">
                     <span className="exit-label">{conn.direction_label}</span>
-                    {conn.world_nodes?.is_safe_zone && (
-                      <span className="exit-safe text-dim">Zona segura</span>
-                    )}
+                    {conn.world_nodes?.is_safe_zone
+                      ? <span className="exit-safe text-dim">Zona segura</span>
+                      : (conn.avg_level != null && (
+                          <span className="exit-level text-dim">Inimigos ~nv {conn.avg_level}</span>
+                        ))}
                   </div>
                   <span className="exit-cost text-dim">{conn.travel_cost} STM</span>
                   <button
@@ -1293,6 +1303,17 @@ export default function Game() {
     }
   }
 
+  // Descansar na pousada: cura HP + estamina por custo baixo, recarrega o estado.
+  async function handleRest(npc) {
+    try {
+      const { data } = await npcService.rest(npc.id, character.id);
+      alert(`Você descansou na ${data.innName}. HP e estamina restaurados (custo ${data.cost}).`);
+      await loadGameState();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Não foi possível descansar.');
+    }
+  }
+
   // Caçar: inicia um combate no nó atual e abre a tela de combate.
   async function handleHunt() {
     if (hunting || combatState) return;
@@ -1364,6 +1385,7 @@ export default function Game() {
            node={gameState.node}
 		   clock={gameState.clock}
 		   narrationSeed={narrationSeed}
+		   nodeAvgLevel={gameState.nodeAvgLevel}
 		/>;
       case 'character':
         return <PageCharacter
@@ -1428,6 +1450,7 @@ export default function Game() {
         characterId={character.id}
         inventory={gameState.inventory || []}
         onShopChange={loadGameState}
+        onRest={handleRest}
       />
 
       {combatState && (

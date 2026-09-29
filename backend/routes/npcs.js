@@ -74,8 +74,63 @@ router.post('/:npcId/talk', async (req, res) => {
   }
 });
 
-// ─── Economia: vendedor ────────────────────────────────────────────────────────
+// ─── Economia: vendedor + pousada ───────────────────────────────────────────────
 const economy = require('../services/economy');
+
+// Custo do descanso na pousada (baixo). O recurso inicial do personagem é
+// dimensionado para ~10 descansos (ver POST /characters).
+const REST_COST = 10;
+
+// POST /npcs/:npcId/rest { characterId } — descansa na pousada: cura HP e estamina
+// ao máximo por um custo fixo em currency. Exige o NPC estalajadeiro no nó atual.
+router.post('/:npcId/rest', async (req, res) => {
+  try {
+    const { characterId } = req.body;
+    if (!characterId) return res.status(400).json({ error: 'characterId obrigatório.' });
+
+    const { data: character } = await supabase
+      .from('characters').select('id, current_node_id, currency').eq('id', characterId)
+      .eq('account_id', req.userId).maybeSingle();
+    if (!character) return res.status(404).json({ error: 'Personagem não encontrado.' });
+
+    const { data: npc } = await supabase
+      .from('npcs').select('id, name, node_id, is_innkeeper').eq('id', req.params.npcId).maybeSingle();
+    if (!npc) return res.status(404).json({ error: 'NPC não encontrado.' });
+    if (!npc.is_innkeeper) return res.status(400).json({ error: 'Este NPC não oferece descanso.' });
+    if (npc.node_id !== character.current_node_id) return res.status(400).json({ error: 'A pousada não está aqui.' });
+
+    if ((character.currency || 0) < REST_COST) {
+      return res.status(400).json({ error: `Moeda insuficiente. O descanso custa ${REST_COST}.` });
+    }
+
+    const { data: derived } = await supabase
+      .from('character_derived').select('hp_max, hp_current, stamina_max, stamina_current')
+      .eq('character_id', characterId).single();
+    if (!derived) return res.status(500).json({ error: 'Derivados não encontrados.' });
+
+    // Já descansado? evita cobrar à toa.
+    if (derived.hp_current >= derived.hp_max && derived.stamina_current >= derived.stamina_max) {
+      return res.status(400).json({ error: 'Você já está descansado.' });
+    }
+
+    // Cura ao máximo, debita currency, reinicia o relógio da regen de estamina.
+    await supabase.from('character_derived')
+      .update({ hp_current: derived.hp_max, stamina_current: derived.stamina_max })
+      .eq('character_id', characterId);
+    const newCurrency = (character.currency || 0) - REST_COST;
+    await supabase.from('characters')
+      .update({ currency: newCurrency, stamina_updated_at: new Date().toISOString() })
+      .eq('id', characterId);
+
+    res.json({
+      ok: true, cost: REST_COST, currency: newCurrency,
+      hp: derived.hp_max, stamina: derived.stamina_max, innName: npc.name,
+    });
+  } catch (err) {
+    console.error('[npcs/rest] EXCEPTION:', err && err.message);
+    res.status(500).json({ error: 'Erro ao descansar.' });
+  }
+});
 
 // Confirma que o NPC é vendedor e está no nó do personagem. Retorna { npc, character }
 // ou lança um objeto { status, error }.

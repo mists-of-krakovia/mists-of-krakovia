@@ -80,6 +80,9 @@ e XP/Nível. ✅
 
 ### Painel direito — Interação
 - Seções: NPCs presentes, Saídas (com custo de estamina), Ações de campo. ✅
+- **Saídas:** cada saída mostra o custo de estamina e o **nível médio dos inimigos**
+  do nó de destino (ex.: "Inimigos ~nv 4"), ou "Zona segura". O nó atual também
+  exibe seu nível médio no cabeçalho. ✅ (ajuda o jogador a calibrar para onde ir.)
 - **Ações de campo:** **Caçar** ✅ (inicia combate). **Explorar área** ✅ (procura
   passagens secretas no nó — chance por Percepção + perícia Investigação, com a
   perícia dominando; ao achar, a saída secreta passa a aparecer). 🔮 Coletar
@@ -215,6 +218,9 @@ indisponíveis).
   `moeda_antiga` = 100%) e vende um estoque fixo de consumíveis (poção, frasco de
   veneno, granadas) por **150%** do valor base. UI de loja (abas Comprar/Vender) no
   painel de interação (botão "Negociar" no NPC vendedor).
+- **Pousada** ✅ (`npcs.is_innkeeper`): **Dona Yelena** em Ironfall. O botão
+  "Descansar" cura **HP e estamina ao máximo** por um custo baixo fixo (10 de moeda).
+  O personagem começa com **100 de moeda** (≈10 descansos).
 - 🔮 **Comércio entre jogadores** (direto e mercado regional) permanece planejado
   (ver Multiplayer e Monetização abaixo).
 

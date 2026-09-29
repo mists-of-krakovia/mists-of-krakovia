@@ -95,7 +95,11 @@ export const npcService = {
 
   // Comprar item do estoque do NPC.
   buy: (npcId, characterId, itemSlug, quantity = 1) =>
-    api.post(`/npcs/${npcId}/buy`, { characterId, itemSlug, quantity })
+    api.post(`/npcs/${npcId}/buy`, { characterId, itemSlug, quantity }),
+
+  // Descansar na pousada (cura HP + estamina por custo baixo).
+  rest: (npcId, characterId) =>
+    api.post(`/npcs/${npcId}/rest`, { characterId })
 };
 
 // Inventário (ações fora de combate)
